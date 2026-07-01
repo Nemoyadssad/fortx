@@ -1,4 +1,4 @@
-﻿FROM node:18-slim AS base
+FROM node:18-slim AS base
 WORKDIR /app
 RUN npm install -g pnpm@9.0.0 corepack && corepack enable
 
@@ -22,6 +22,6 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 
 EXPOSE 3000
-CMD ["node", "apps/api/dist/main.js"]
+CMD ["node", "apps/api/dist/src/main.js"]
 
 # cache-bust 2026-07-02T01:13:25.0629108+03:00
