@@ -1,0 +1,12 @@
+{
+  "name": "predikt",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prediction market + casino on a house/bookmaker model, with Polymarket as a quotes feed.",
+  "scripts": {
+    "api:dev": "pnpm --filter @predikt/api start:dev",
+    "api:seed": "pnpm --filter @predikt/api db:seed",
+    "web:dev": "pnpm --filter @predikt/web dev"
+  },
+  "packageManager": "pnpm@9.0.0"
+}

@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: predikt-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: predikt
+      POSTGRES_PASSWORD: predikt
+      POSTGRES_DB: predikt
+    ports:
+      - "5432:5432"
+    volumes:
+      - predikt-pgdata:/var/lib/postgresql/data
+
+volumes:
+  predikt-pgdata:

@@ -1,0 +1,8 @@
+{
+  "/cashier/page": "app/cashier/page.js",
+  "/page": "app/page.js",
+  "/legal/terms/page": "app/legal/terms/page.js",
+  "/event/[id]/page": "app/event/[id]/page.js",
+  "/how/page": "app/how/page.js",
+  "/leaderboard/page": "app/leaderboard/page.js"
+}

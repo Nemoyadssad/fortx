@@ -1,0 +1,463 @@
+// Predikt — data model
+// Money integrity rests on a double-entry ledger: every movement of value is a
+// LedgerTransaction made of LedgerEntry legs whose signed amounts sum to exactly 0.
+// A user's balance is never an editable field a request can set — it is the sum of
+// that account's entries (cached on LedgerAccount.balance and reconcilable at any time).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Users & access control
+// ---------------------------------------------------------------------------
+
+enum Role {
+  USER
+  SUPPORT
+  ADMIN
+  SUPERADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String? // null for OAuth-only (Google) accounts
+  googleId     String?    @unique
+  displayName  String?
+  role         Role       @default(USER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  accounts    LedgerAccount[]
+  bets        Bet[]
+  gameRounds  GameRound[]
+  auditLogs   AuditLog[]          @relation("ActorAuditLogs")
+  createdTxns LedgerTransaction[] @relation("CreatedTxns")
+  supportThread SupportThread?
+
+  referralCode String? @unique
+  referredById String?
+  referredBy   User?   @relation("Referrals", fields: [referredById], references: [id])
+  referrals    User[]  @relation("Referrals")
+
+  following  Follow[] @relation("Following")
+  followers  Follow[] @relation("Followers")
+
+  jackpotWins    JackpotRound[] @relation("JackpotWins")
+  jackpotEntries JackpotEntry[] @relation("JackpotEntries")
+  payments       Payment[]
+}
+
+
+// ---------------------------------------------------------------------------
+// Social graph — follow successful forecasters
+// ---------------------------------------------------------------------------
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  follower    User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  following   User     @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@index([followerId])
+}
+
+// ---------------------------------------------------------------------------
+// Double-entry ledger
+// ---------------------------------------------------------------------------
+
+enum AccountType {
+  USER_CASH // a user's spendable balance
+  USER_BONUS // bonus / locked funds
+  SYSTEM_HOUSE // the house pot — counterparty to bets and games
+  SYSTEM_DEPOSITS // contra account for money entering the system
+  SYSTEM_WITHDRAWALS // contra account for money leaving the system
+  SYSTEM_ESCROW // stakes locked while bets are open
+  SYSTEM_REVENUE // realised house profit
+  SYSTEM_PROMO // source of granted bonuses
+  SYSTEM_EQUITY // owner capital injected into the house
+}
+
+model LedgerAccount {
+  id        String      @id @default(cuid())
+  type      AccountType
+  ownerId   String? // null for all SYSTEM_* accounts
+  owner     User?       @relation(fields: [ownerId], references: [id])
+  currency  String      @default("USD")
+  // Cached balance. Always equals SUM(entries.amount). Entries are the source of truth.
+  balance   Decimal     @default(0) @db.Decimal(20, 8)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  entries LedgerEntry[]
+
+  @@unique([ownerId, type, currency])
+  @@index([type])
+}
+
+enum TxnKind {
+  DEPOSIT
+  WITHDRAWAL
+  BET_PLACE
+  BET_SETTLE_WIN
+  BET_SETTLE_LOSS
+  BET_REFUND
+  GAME_STAKE
+  GAME_PAYOUT
+  ADMIN_ADJUST
+  BONUS_GRANT
+}
+
+model LedgerTransaction {
+  id             String  @id @default(cuid())
+  kind           TxnKind
+  reference      String? // e.g. bet id, game round id, payment id
+  idempotencyKey String? @unique // repeat calls with same key are no-ops
+  createdById    String? // who triggered it (user / admin / system)
+  createdBy      User?   @relation("CreatedTxns", fields: [createdById], references: [id])
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  entries LedgerEntry[]
+
+  @@index([kind])
+  @@index([reference])
+}
+
+model LedgerEntry {
+  id            String            @id @default(cuid())
+  transactionId String
+  transaction   LedgerTransaction @relation(fields: [transactionId], references: [id])
+  accountId     String
+  account       LedgerAccount     @relation(fields: [accountId], references: [id])
+  // Signed amount: positive credits the account, negative debits it.
+  // Invariant enforced in code: per transaction, SUM(amount) = 0.
+  amount        Decimal           @db.Decimal(20, 8)
+  createdAt     DateTime          @default(now())
+
+  @@index([accountId])
+  @@index([transactionId])
+}
+
+// ---------------------------------------------------------------------------
+// Prediction markets (Polymarket as a quotes feed; the house is the counterparty)
+// ---------------------------------------------------------------------------
+
+enum EventSource {
+  POLYMARKET
+  INTERNAL
+}
+
+enum EventStatus {
+  OPEN
+  CLOSED
+  RESOLVED
+  CANCELLED
+}
+
+model Event {
+  id          String      @id @default(cuid())
+  source      EventSource @default(POLYMARKET)
+  sourceId    String? // gamma event id or slug
+  slug        String      @unique
+  title       String
+  description String?
+  category    String?
+  imageUrl    String?
+  status      EventStatus @default(OPEN)
+  closesAt    DateTime?
+  resolvedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  markets Market[]
+
+  @@unique([source, sourceId])
+  @@index([status])
+}
+
+enum MarketStatus {
+  OPEN
+  CLOSED
+  RESOLVED
+  CANCELLED
+}
+
+model Market {
+  id                String       @id @default(cuid())
+  eventId           String
+  event             Event        @relation(fields: [eventId], references: [id])
+  sourceId          String? // gamma market id / condition id
+  question          String
+  status            MarketStatus @default(OPEN)
+  resolvedOutcomeId String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  outcomes Outcome[]
+  bets     Bet[]
+
+  @@unique([eventId, sourceId])
+  @@index([status])
+}
+
+model Outcome {
+  id            String   @id @default(cuid())
+  marketId      String
+  market        Market   @relation(fields: [marketId], references: [id])
+  label         String // "Yes" / "No" / candidate name
+  // Implied probability in [0,1] from the feed. Decimal odds = 1 / price.
+  price         Decimal  @db.Decimal(10, 6)
+  sourceTokenId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  bets Bet[]
+
+  @@unique([marketId, label])
+  @@index([marketId])
+}
+
+enum BetStatus {
+  OPEN
+  WON
+  LOST
+  REFUNDED
+  SOLD
+}
+
+model Bet {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  marketId        String
+  market          Market    @relation(fields: [marketId], references: [id])
+  outcomeId       String
+  outcome         Outcome   @relation(fields: [outcomeId], references: [id])
+  stake           Decimal   @db.Decimal(20, 8)
+  priceAtBet      Decimal   @db.Decimal(10, 6) // odds locked in at placement
+  potentialPayout Decimal   @db.Decimal(20, 8) // stake / priceAtBet (fixed-odds)
+  status          BetStatus @default(OPEN)
+  placedAt        DateTime  @default(now())
+  settledAt       DateTime?
+
+  @@index([userId])
+  @@index([marketId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Audit trail — every privileged action (balance adjust, resolve, ban) lands here
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("ActorAuditLogs", fields: [actorId], references: [id])
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+}
+
+// ---------------------------------------------------------------------------
+// Casino games — server-authoritative rounds. Secret state (bomb positions,
+// server seed) lives in `state`/`serverSeed` and is never sent to the client
+// until the round ends. Multiplier and payout are computed server-side only.
+// ---------------------------------------------------------------------------
+
+enum GameType {
+  MINES
+  TOWER
+  LADDER
+  CRASH
+  DICE
+  PLINKO
+  ROULETTE
+}
+
+enum GameStatus {
+  ACTIVE
+  CASHED_OUT
+  BUST
+}
+
+model GameRound {
+  id             String     @id @default(cuid())
+  userId         String
+  user           User       @relation(fields: [userId], references: [id])
+  game           GameType
+  stake          Decimal    @db.Decimal(20, 8)
+  status         GameStatus @default(ACTIVE)
+  multiplier     Decimal    @default(1) @db.Decimal(20, 8)
+  payout         Decimal    @default(0) @db.Decimal(20, 8)
+  serverSeed     String // revealed to the player only after the round ends
+  serverSeedHash String // shown up-front so results can be verified later
+  config         Json // public params, e.g. { mines: 3, gridSize: 25 }
+  state          Json // SECRET: { bombs: number[], revealed: number[] }
+  createdAt      DateTime   @default(now())
+  endedAt        DateTime?
+
+  @@index([userId])
+  @@index([game, status])
+}
+
+// ---------------------------------------------------------------------------
+// Support live chat
+// ---------------------------------------------------------------------------
+
+enum SupportStatus {
+  OPEN
+  CLOSED
+}
+
+enum SupportSender {
+  USER
+  AGENT
+  SYSTEM
+}
+
+model SupportThread {
+  id            String           @id @default(cuid())
+  userId        String           @unique
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status        SupportStatus    @default(OPEN)
+  lastMessageAt DateTime         @default(now())
+  userUnread    Int              @default(0) // messages from agents the user hasn't seen
+  agentUnread   Int              @default(0) // messages from the user an agent hasn't seen
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  messages      SupportMessage[]
+
+  @@index([status, lastMessageAt])
+}
+
+model SupportMessage {
+  id        String        @id @default(cuid())
+  threadId  String
+  thread    SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender    SupportSender
+  agentId   String? // which admin replied (when sender = AGENT)
+  body      String
+  createdAt DateTime      @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Promo codes
+// ---------------------------------------------------------------------------
+
+model PromoCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  amount    Decimal   @db.Decimal(20, 8)
+  maxUses   Int       @default(0) // 0 = unlimited
+  uses      Int       @default(0)
+  expiresAt DateTime?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  redemptions PromoRedemption[]
+}
+
+model PromoRedemption {
+  id        String    @id @default(cuid())
+  codeId    String
+  promo     PromoCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime  @default(now())
+
+  @@unique([codeId, userId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Tunable site/game settings (single row, JSON blob, edited from admin).
+// ---------------------------------------------------------------------------
+model Setting {
+  id        String   @id
+  data      Json
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Jackpot wheel — community pot game
+// ---------------------------------------------------------------------------
+enum JackpotStatus {
+  OPEN       // accepting entries
+  SPINNING   // winner chosen, animating
+  CLOSED     // paid out
+}
+
+model JackpotRound {
+  id         String        @id @default(cuid())
+  status     JackpotStatus @default(OPEN)
+  pot        Decimal       @default(0) @db.Decimal(20, 8)
+  winnerId   String?
+  winner     User?         @relation("JackpotWins", fields: [winnerId], references: [id])
+  seed       String        @default("")
+  createdAt  DateTime      @default(now())
+  closedAt   DateTime?
+  entries    JackpotEntry[]
+}
+
+model JackpotEntry {
+  id        String       @id @default(cuid())
+  roundId   String
+  round     JackpotRound @relation(fields: [roundId], references: [id])
+  userId    String
+  user      User         @relation("JackpotEntries", fields: [userId], references: [id])
+  amount    Decimal      @db.Decimal(20, 8)
+  createdAt DateTime     @default(now())
+
+  @@index([roundId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Platega crypto payments
+// ---------------------------------------------------------------------------
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+  CHARGEBACKED
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+  plategaId       String        @unique // Platega transaction UUID
+  amount          Decimal       @db.Decimal(20, 8)
+  currency        String        @default("USDT")
+  status          PaymentStatus @default(PENDING)
+  redirectUrl     String?
+  createdAt       DateTime      @default(now())
+  confirmedAt     DateTime?
+
+  @@index([userId])
+  @@index([plategaId])
+}
