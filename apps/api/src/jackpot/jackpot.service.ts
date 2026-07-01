@@ -52,7 +52,7 @@ export class JackpotService {
       orderBy: { closedAt: 'desc' },
       take,
     });
-    return rounds.map(r => this.serialize(r));
+    return rounds.map((r: any) => this.serialize(r));
   }
 
   /** Enter the current round */
@@ -113,7 +113,7 @@ export class JackpotService {
       const roll = parseInt(hash.slice(0, 8), 16);
 
       const pot = Number(round.pot);
-      const total = round.entries.reduce((s, e) => s + Number(e.amount), 0);
+      const total = round.entries.reduce((s: number, e: any) => s + Number(e.amount), 0);
       let cursor = 0;
       const point = (roll / 0xffffffff) * total;
       let winnerId = round.entries[round.entries.length - 1].userId;

@@ -5,14 +5,10 @@ import { AccountType, TxnKind } from '@prisma/client';
 
 const BASE = 'https://app.platega.io';
 
-// Platega crypto payment method IDs (from their docs/dashboard)
-// 11 = USDT TRC20, 12 = USDT ERC20, 13 = BTC, 14 = ETH — confirm in your dashboard
-const CRYPTO_METHODS: Record<string, number> = {
-  'USDT_TRC20': 11,
-  'USDT_ERC20': 12,
-  'BTC': 13,
-  'ETH': 14,
-};
+// Platega crypto method ID — find yours via GET /payments/platega-methods after setting keys
+// Set PLATEGA_CRYPTO_METHOD_ID in .env (check your Platega dashboard → Payment Methods)
+// Default 3 is a common crypto method ID, but yours may differ
+const DEFAULT_CRYPTO_METHOD_ID = 3;
 
 @Injectable()
 export class PaymentsService {
@@ -40,10 +36,10 @@ export class PaymentsService {
     if (!this.configured) throw new BadRequestException('Payment gateway not configured.');
     if (amountUsd < 1 || amountUsd > 10000) throw new BadRequestException('Amount must be $1–$10 000.');
 
-    const methodId = CRYPTO_METHODS[method] ?? CRYPTO_METHODS['USDT_TRC20'];
+    const methodId = parseInt(this.config.get('PLATEGA_CRYPTO_METHOD_ID') ?? String(DEFAULT_CRYPTO_METHOD_ID));
     const body = {
       amount: amountUsd,
-      currency: 'USDT',
+      currency: 'USD',
       payment_method: methodId,
       description: `FORTX deposit $${amountUsd}`,
       return_url: `${webOrigin}/cashier?status=success`,
@@ -135,7 +131,7 @@ export class PaymentsService {
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
-    return payments.map(p => ({
+    return payments.map((p: any) => ({
       id: p.id,
       amount: +Number(p.amount).toFixed(2),
       currency: p.currency,
@@ -145,7 +141,26 @@ export class PaymentsService {
     }));
   }
 
+  /** Fetch real payment method IDs from Platega dashboard */
+  async getPlategaMethods() {
+    if (!this.configured) return { configured: false, methods: [] };
+    try {
+      const res = await fetch(`${BASE}/api/payment-methods`, {
+        headers: this.headers(),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      // Returns array of { id, name, active, commission }
+      const methods = (data?.data ?? data ?? [])
+        .filter((m: any) => m?.active !== false)
+        .map((m: any) => ({ id: m.id, name: m.name, active: m.active, commission: m.commission }));
+      return { configured: true, methods };
+    } catch (e) {
+      this.logger.warn('Could not fetch Platega methods: ' + (e as Error).message);
+      return { configured: true, methods: [] };
+    }
+  }
+
   get methods() {
-    return Object.keys(CRYPTO_METHODS).map(k => ({ id: k, label: k.replace('_', ' ') }));
+    return [{ id: 'CRYPTO', label: 'Cryptocurrency (USDT / BTC / ETH)' }];
   }
 }

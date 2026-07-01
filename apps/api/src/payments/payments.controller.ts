@@ -6,9 +6,13 @@ import { Public } from '../common/auth/public.decorator';
 export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
-  /** Available crypto methods */
+  /** Available crypto methods (local labels) */
   @Get('methods')
   methods() { return this.payments.methods; }
+
+  /** Fetch real method IDs from Platega — use to find your crypto method ID */
+  @Get('platega-methods')
+  plategaMethods() { return this.payments.getPlategaMethods(); }
 
   /** Create deposit — returns Platega redirect URL */
   @Post('deposit')

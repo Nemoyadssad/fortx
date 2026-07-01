@@ -1,5 +1,4 @@
-import { PrismaClient, Prisma, AccountType } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
+import { PrismaClient, AccountType, Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
@@ -34,8 +33,8 @@ async function main() {
     where: { idempotencyKey: 'seed:house-capital' },
   });
   if (!alreadyFunded) {
-    const amount = new Decimal(100000);
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const amount = new Prisma.Decimal(100000);
+    await prisma.$transaction(async (tx) => {
       const t = await tx.ledgerTransaction.create({
         data: { kind: 'ADMIN_ADJUST', idempotencyKey: 'seed:house-capital' },
       });
