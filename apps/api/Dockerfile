@@ -12,15 +12,16 @@ FROM deps AS build
 COPY . .
 RUN pnpm --filter @predikt/api prisma:generate
 RUN pnpm --filter @predikt/api build
+RUN echo "=== DIST CONTENTS ===" && find /app/apps/api/dist -maxdepth 3
 
 FROM base AS runner
 ENV NODE_ENV=production
-ENV CACHE_BUST=20260702014500
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/prisma ./apps/api/prisma
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
+RUN echo "=== RUNNER DIST CONTENTS ===" && find /app/apps/api/dist -maxdepth 3
 
 EXPOSE 3000
 CMD ["node", "apps/api/dist/src/main.js"]
