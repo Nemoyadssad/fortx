@@ -48,6 +48,10 @@ model User {
   createdTxns LedgerTransaction[] @relation("CreatedTxns")
   supportThread SupportThread?
 
+jackpotWins    JackpotRound[] @relation("JackpotWins")
+jackpotEntries JackpotEntry[] @relation("JackpotEntries")
+payments       Payment[]
+
   referralCode String? @unique
   referredById String?
   referredBy   User?   @relation("Referrals", fields: [referredById], references: [id])
