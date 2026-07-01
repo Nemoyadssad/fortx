@@ -1,4 +1,4 @@
-FROM node:18-slim AS base
+﻿FROM node:18-slim AS base
 WORKDIR /app
 RUN npm install -g pnpm@9.0.0 corepack && corepack enable
 
@@ -14,7 +14,8 @@ RUN pnpm --filter @predikt/api prisma:generate
 RUN pnpm --filter @predikt/api build
 
 FROM base AS runner
-ENV NODE_ENV=production`nENV FORCE_REBUILD=2
+ENV NODE_ENV=production
+ENV CACHE_BUST=20260702014500
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/prisma ./apps/api/prisma
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json
@@ -23,5 +24,3 @@ COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 
 EXPOSE 3000
 CMD ["node", "apps/api/dist/src/main.js"]
-
-# cache-bust-2 2026-07-02T01:34:56.3787276+03:00
