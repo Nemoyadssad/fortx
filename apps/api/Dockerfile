@@ -23,3 +23,5 @@ COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 
 EXPOSE 3000
 CMD ["node", "apps/api/dist/main.js"]
+
+# cache-bust 2026-07-02T01:13:25.0629108+03:00
