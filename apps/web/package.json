@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "@predikt/web",
   "version": "0.1.0",
   "private": true,
@@ -23,39 +23,3 @@
     "typescript": "^5.5.0"
   }
 }
-
-node_modules
-**/node_modules
-**/dist
-.git
-.env
-apps/web/.next
-
-FROM node:18-slim AS base
-WORKDIR /app
-RUN npm install -g pnpm@9.0.0 corepack && corepack enable
-
-# ---- deps: ставим зависимости всей монорепы (нужен полный workspace context) ----
-FROM base AS deps
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY apps/api/package.json apps/api/package.json
-COPY apps/web/package.json apps/web/package.json
-RUN pnpm install --frozen-lockfile
-
-# ---- build: генерируем Prisma Client и собираем NestJS ----
-FROM deps AS build
-COPY . .
-RUN pnpm --filter @predikt/api prisma:generate
-RUN pnpm --filter @predikt/api build
-
-# ---- runner: только то, что нужно для запуска ----
-FROM base AS runner
-ENV NODE_ENV=production
-COPY --from=build /app/apps/api/dist ./apps/api/dist
-COPY --from=build /app/apps/api/prisma ./apps/api/prisma
-COPY --from=build /app/apps/api/package.json ./apps/api/package.json
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
-
-EXPOSE 3000
-CMD ["node", "apps/api/dist/main.js"]
