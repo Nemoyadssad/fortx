@@ -1,4 +1,4 @@
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const API = "https://api.fortx.world";
 const TOKEN_KEY = 'predikt_token';
 
 export function getToken(): string | null {
