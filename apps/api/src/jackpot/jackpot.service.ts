@@ -9,6 +9,7 @@ const MIN_STAKE = 0.5;
 const MAX_STAKE = 5000;
 const SPIN_DELAY_MS = 20_000; // 20 s open window, then spin
 const HOUSE_CUT = 0.05;       // 5 % rake
+const POST_SPIN_COOLDOWN_MS = 8_000; // how long the winner stays visible before a new round opens
 
 @Injectable()
 export class JackpotService {
@@ -32,6 +33,19 @@ export class JackpotService {
       orderBy: { createdAt: 'desc' },
     });
     if (!round) {
+      // Показываем только что закрытый раунд ещё немного, чтобы фронт
+      // успел доиграть анимацию колеса и показать победителя.
+      const lastClosed = await this.prisma.jackpotRound.findFirst({
+        where: { status: 'CLOSED' },
+        include: {
+          entries: { include: { user: { select: { id: true, email: true, displayName: true } } } },
+          winner: { select: { id: true, email: true, displayName: true } },
+        },
+        orderBy: { closedAt: 'desc' },
+      });
+      if (lastClosed?.closedAt && Date.now() - lastClosed.closedAt.getTime() < POST_SPIN_COOLDOWN_MS) {
+        return this.serialize(lastClosed);
+      }
       round = await this.prisma.jackpotRound.create({
         data: { status: 'OPEN', seed: randomBytes(16).toString('hex') },
         include: { entries: { include: { user: { select: { id: true, email: true, displayName: true } } } } },
@@ -177,10 +191,6 @@ export class JackpotService {
       });
 
       this.logger.log(`Jackpot ${roundId}: winner ${winnerId}, payout $${payout}`);
-
-      setTimeout(() => this.prisma.jackpotRound.create({
-        data: { status: 'OPEN', seed: randomBytes(16).toString('hex') },
-      }).catch(() => {}), 8_000);
 
     } catch (e) {
       this.logger.error('Jackpot spin error', e);

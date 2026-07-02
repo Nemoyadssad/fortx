@@ -18,10 +18,29 @@ type Round = {
   createdAt: string; closedAt: string|null; spinAt: string|null;
 };
 
-function JackpotWheel({ segments, spinning, winnerIdx }: { segments: Segment[]; spinning: boolean; winnerIdx: number }) {
+// Computes the rotation (in degrees, unbounded) that lands the winner's
+// sector on the pointer (fixed at angle 0 / 3 o'clock).
+function computeTargetRotation(segments: Segment[], winnerId: string, fromRotation: number): number {
+  let angle = 0;
+  let winnerMid = 0;
+  let found = false;
+  for (const seg of segments) {
+    const sweep = seg.pct * 3.6; // pct -> degrees
+    if (!found && seg.userId === winnerId) {
+      winnerMid = angle + sweep / 2;
+      found = true;
+      break;
+    }
+    angle += sweep;
+  }
+  const normalizedFrom = ((fromRotation % 360) + 360) % 360;
+  const delta = ((-winnerMid - normalizedFrom) % 360 + 360) % 360;
+  const extraSpins = 4; // a few extra full turns for effect
+  return fromRotation + extraSpins * 360 + delta;
+}
+
+function JackpotWheel({ segments, rotation }: { segments: Segment[]; rotation: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [rotation, setRotation] = useState(0);
-  const rotRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return;
@@ -30,7 +49,6 @@ function JackpotWheel({ segments, spinning, winnerIdx }: { segments: Segment[]; 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (segments.length === 0) {
-      // empty wheel placeholder
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
       ctx.fillStyle = 'rgb(var(--panel2))'; ctx.fill();
       ctx.strokeStyle = 'rgb(var(--fg) / 0.08)'; ctx.lineWidth = 2; ctx.stroke();
@@ -53,7 +71,6 @@ function JackpotWheel({ segments, spinning, winnerIdx }: { segments: Segment[]; 
       ctx.fillStyle = colorMap[seg.userId]; ctx.fill();
       ctx.strokeStyle = 'rgb(var(--bg))'; ctx.lineWidth = 2; ctx.stroke();
 
-      // label if sector big enough
       if (seg.pct > 5) {
         const mid = startAngle + sweep / 2;
         const lx = cx + Math.cos(mid) * r * 0.65;
@@ -66,30 +83,13 @@ function JackpotWheel({ segments, spinning, winnerIdx }: { segments: Segment[]; 
       startAngle += sweep;
     }
 
-    // center circle
     ctx.beginPath(); ctx.arc(cx, cy, 28, 0, Math.PI*2);
     ctx.fillStyle = 'rgb(var(--bg))'; ctx.fill();
     ctx.strokeStyle = '#f5c542'; ctx.lineWidth = 3; ctx.stroke();
   }, [segments, rotation]);
 
-  // Spin animation
-  useEffect(() => {
-    if (!spinning) return;
-    let frame: number;
-    let speed = 12;
-    const tick = () => {
-      speed = Math.max(0.3, speed * 0.992);
-      rotRef.current = (rotRef.current + speed) % 360;
-      setRotation(rotRef.current);
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [spinning]);
-
   return (
     <div className="relative mx-auto flex items-center justify-center" style={{ width: 300, height: 300 }}>
-      {/* pointer */}
       <div className="absolute right-0 top-1/2 z-10 -translate-y-1/2 translate-x-1">
         <div className="h-0 w-0 border-y-8 border-r-[18px] border-y-transparent border-r-gold" />
       </div>
@@ -109,6 +109,8 @@ function PlayerRow({ seg, color, isMe }: { seg: Segment; color: string; isMe: bo
   );
 }
 
+type WheelPhase = 'idle' | 'anticipating' | 'revealing' | 'done';
+
 export default function JackpotPage() {
   const { email, refreshBalance } = useAuth();
   const [round, setRound] = useState<Round | null>(null);
@@ -117,7 +119,11 @@ export default function JackpotPage() {
   const [entering, setEntering] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(20);
-  const [forceSpin, setForceSpin] = useState(false);
+  const [wheelPhase, setWheelPhase] = useState<WheelPhase>('idle');
+  const [rotation, setRotation] = useState(0);
+  const rotationRef = useRef(0);
+  const anticipatingRoundId = useRef<string | null>(null);
+  const revealTarget = useRef<number | null>(null);
   const hasEntries = (round?.segments?.length ?? 0) > 0;
 
   const load = useCallback(async () => {
@@ -131,28 +137,105 @@ export default function JackpotPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    const t = setInterval(load, forceSpin ? 800 : 3000);
-    return () => clearInterval(t);
-  }, [load, forceSpin]);
 
-  // Countdown timer when round has entries
+  // Poll faster while the wheel is anticipating/revealing so we catch the
+  // server's result as soon as it's ready.
+  useEffect(() => {
+    const fast = wheelPhase === 'anticipating' || wheelPhase === 'revealing';
+    const t = setInterval(load, fast ? 800 : 3000);
+    return () => clearInterval(t);
+  }, [load, wheelPhase]);
+
+  // Countdown timer, derived from the server's spinAt. When it hits 0 we
+  // start the "anticipating" fast-spin — the real outcome arrives shortly after.
   useEffect(() => {
     if (!hasEntries || round?.status !== 'OPEN' || !round?.spinAt) return;
     const spinAt = new Date(round.spinAt).getTime();
     const tick = () => {
       const raw = Math.round((spinAt - Date.now()) / 1000);
-      const secs = Math.max(0, Math.min(30, raw)); // never trust more than 30s
+      const secs = Math.max(0, Math.min(30, raw));
       setCountdown(secs);
-      if (secs === 0) {
-        setForceSpin(true);
-        setTimeout(() => setForceSpin(false), 4200);
+      if (secs === 0 && wheelPhase === 'idle') {
+        anticipatingRoundId.current = round.id;
+        setWheelPhase('anticipating');
       }
     };
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [round?.id, round?.spinAt, hasEntries, round?.status]);
+  }, [round?.id, round?.spinAt, hasEntries, round?.status, wheelPhase]);
+
+  // Fast spin while waiting for the server to confirm the result.
+  useEffect(() => {
+    if (wheelPhase !== 'anticipating') return;
+    let raf: number;
+    const loop = () => {
+      rotationRef.current += 14;
+      setRotation(rotationRef.current);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [wheelPhase]);
+
+  // Once the server confirms this exact round is CLOSED with a winner,
+  // compute the landing angle and switch to the reveal animation.
+  useEffect(() => {
+    if (wheelPhase !== 'anticipating') return;
+    if (round?.id !== anticipatingRoundId.current) return;
+    if (round?.status === 'CLOSED' && round.winnerId) {
+      revealTarget.current = computeTargetRotation(round.segments, round.winnerId, rotationRef.current);
+      setWheelPhase('revealing');
+    }
+  }, [round, wheelPhase]);
+
+  // Decelerate smoothly onto the winner's sector.
+  useEffect(() => {
+    if (wheelPhase !== 'revealing' || revealTarget.current == null) return;
+    const start = rotationRef.current;
+    const target = revealTarget.current;
+    const duration = 3200;
+    const t0 = performance.now();
+    let raf: number;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const r = start + (target - start) * eased;
+      rotationRef.current = r;
+      setRotation(r);
+      if (t < 1) {
+        raf = requestAnimationFrame(step);
+      } else {
+        setWheelPhase('done');
+      }
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [wheelPhase]);
+
+  // If the page loads while a round is already closed (mid cooldown),
+  // show the winner immediately without animating from scratch.
+  useEffect(() => {
+    if (!round) return;
+    if (wheelPhase === 'idle' && round.status === 'CLOSED' && round.winnerId && anticipatingRoundId.current !== round.id) {
+      const target = computeTargetRotation(round.segments, round.winnerId, 0);
+      rotationRef.current = target;
+      setRotation(target);
+      anticipatingRoundId.current = round.id;
+      setWheelPhase('done');
+    }
+  }, [round?.id, round?.status, wheelPhase]);
+
+  // When a genuinely new round starts (cooldown over), reset the wheel.
+  useEffect(() => {
+    if (!round) return;
+    if (wheelPhase === 'done' && round.id !== anticipatingRoundId.current) {
+      setWheelPhase('idle');
+      rotationRef.current = 0;
+      setRotation(0);
+      revealTarget.current = null;
+    }
+  }, [round?.id, wheelPhase]);
 
   async function enter() {
     if (!email) { window.dispatchEvent(new CustomEvent('predikt:auth')); return; }
@@ -166,19 +249,15 @@ export default function JackpotPage() {
     } finally { setEntering(false); }
   }
 
-  const spinning = round?.status === 'SPINNING' || forceSpin;
-  const closed   = round?.status === 'CLOSED';
+  const spinning = wheelPhase === 'anticipating' || wheelPhase === 'revealing';
+  const showWinner = wheelPhase === 'done' && round?.status === 'CLOSED' && round?.winner;
 
-  // Build colorMap for player list
   const uniqUsers = [...new Set((round?.segments ?? []).map(s => s.userId))];
   const colorMap: Record<string, string> = {};
   uniqUsers.forEach((uid, i) => { colorMap[uid] = COLORS[i % COLORS.length]; });
 
-  const myId = round?.segments.find(s => s.name.endsWith('(you)'))?.userId;
-
   return (
     <div className="mx-auto max-w-5xl px-5 py-10">
-      {/* header */}
       <div className="mb-8 text-center">
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-gold to-gold-deep shadow-gold">
           <Trophy className="h-7 w-7 text-black" />
@@ -190,35 +269,27 @@ export default function JackpotPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        {/* Left: wheel + status */}
         <div className="flex flex-col items-center gap-5 rounded-3xl border hairline panel p-6">
-          {/* pot display */}
           <div className="text-center">
             <p className="font-mono text-[11px] uppercase tracking-widest text-fg/40">Total pot</p>
             <p className="font-display text-5xl font-bold gold-text">{round ? fmtMoney(round.pot) : '—'}</p>
           </div>
 
-          {/* wheel */}
-          <JackpotWheel
-            segments={round?.segments ?? []}
-            spinning={spinning}
-            winnerIdx={-1}
-          />
+          <JackpotWheel segments={round?.segments ?? []} rotation={rotation} />
 
-          {/* status bar */}
           {spinning && (
             <div className="flex items-center gap-2 rounded-xl bg-gold/15 px-4 py-2 text-sm font-semibold text-gold-deep">
               <RefreshCw className="h-4 w-4 animate-spin" /> Spinning…
             </div>
           )}
-          {closed && round?.winner && (
+          {showWinner && (
             <div className="rounded-xl bg-win/15 px-6 py-3 text-center">
               <p className="text-xs text-fg/50">Winner</p>
-              <p className="font-display text-xl font-bold text-win">{round.winner}</p>
-              <p className="text-sm text-fg/60">took {fmtMoney(round.pot * 0.95)}</p>
+              <p className="font-display text-xl font-bold text-win">{round!.winner}</p>
+              <p className="text-sm text-fg/60">took {fmtMoney(round!.pot * 0.95)}</p>
             </div>
           )}
-          {round?.status === 'OPEN' && hasEntries && (
+          {round?.status === 'OPEN' && hasEntries && wheelPhase === 'idle' && (
             <div className="flex items-center gap-2 text-sm text-fg/50">
               <Clock className="h-4 w-4" />
               Spinning in <span className="font-mono font-bold text-gold-deep">{countdown}s</span>
@@ -229,9 +300,7 @@ export default function JackpotPage() {
           )}
         </div>
 
-        {/* Right: enter + player list */}
         <div className="flex flex-col gap-4">
-          {/* Enter card */}
           <div className="rounded-2xl panel p-5">
             <h2 className="mb-3 font-display text-lg font-bold">Enter the pot</h2>
             <div className="flex gap-2">
@@ -258,7 +327,6 @@ export default function JackpotPage() {
             <p className="mt-2 text-center text-[11px] text-fg/35">5% house rake · Winner takes the rest</p>
           </div>
 
-          {/* Players */}
           <div className="rounded-2xl panel p-5">
             <div className="mb-3 flex items-center gap-2">
               <Users className="h-4 w-4 text-fg/40" />
@@ -280,7 +348,6 @@ export default function JackpotPage() {
         </div>
       </div>
 
-      {/* History */}
       {history.length > 0 && (
         <div className="mt-8">
           <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-bold">
