@@ -137,15 +137,14 @@ export default function JackpotPage() {
   }, [load, forceSpin]);
 
   // Countdown timer when round has entries
-     useEffect(() => {
+  useEffect(() => {
     if (!hasEntries || round?.status !== 'OPEN' || !round?.spinAt) return;
     const spinAt = new Date(round.spinAt).getTime();
     const tick = () => {
-      const secs = Math.max(0, Math.round((spinAt - Date.now()) / 1000));
+      const raw = Math.round((spinAt - Date.now()) / 1000);
+      const secs = Math.max(0, Math.min(30, raw)); // never trust more than 30s
       setCountdown(secs);
       if (secs === 0) {
-        // Trigger the wheel animation locally — the real SPINNING status
-        // on the server is too short-lived to reliably catch by polling.
         setForceSpin(true);
         setTimeout(() => setForceSpin(false), 4200);
       }
