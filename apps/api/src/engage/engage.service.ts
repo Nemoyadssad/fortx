@@ -250,41 +250,68 @@ export class EngageService {
 
   // ---------- Notifications ----------
   async notifications(userId: string) {
-    const [credits, bets] = await Promise.all([
-      this.prisma.auditLog.findMany({
-        where: { actorId: userId, action: 'BALANCE_ADJUST' },
-        orderBy: { createdAt: 'desc' },
-        take: 15,
-        select: { metadata: true, createdAt: true },
-      }),
-      this.prisma.bet.findMany({
-        where: { userId, status: { in: ['WON', 'LOST'] } },
-        orderBy: { settledAt: 'desc' },
-        take: 10,
-        select: { status: true, stake: true, potentialPayout: true, settledAt: true, placedAt: true, market: { select: { question: true } } },
-      }),
-    ]);
+  const [credits, bets, announcements] = await Promise.all([
+    this.prisma.auditLog.findMany({
+      where: { actorId: userId, action: 'BALANCE_ADJUST' },
+      orderBy: { createdAt: 'desc' },
+      take: 15,
+      select: { metadata: true, createdAt: true },
+    }),
+    this.prisma.bet.findMany({
+      where: { userId, status: { in: ['WON', 'LOST'] } },
+      orderBy: { settledAt: 'desc' },
+      take: 10,
+      select: { status: true, stake: true, potentialPayout: true, settledAt: true, placedAt: true, market: { select: { question: true } } },
+    }),
+    this.prisma.auditLog.findMany({
+      where: { action: 'ANNOUNCEMENT' },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { metadata: true, createdAt: true },
+    }),
+  ]);
 
-    const items = [
-      ...credits.map((c) => {
-        const amount = Number((c.metadata as any)?.amount ?? 0);
-        const note = (c.metadata as any)?.note ?? 'Balance update';
-        return { type: 'reward', text: note as string, amount, positive: amount >= 0, at: c.createdAt };
-      }),
-      ...bets.map((b) => {
-        const won = b.status === 'WON';
-        return {
-          type: 'bet',
-          text: `${won ? 'Prediction won' : 'Prediction lost'}: ${b.market.question}`,
-          amount: won ? Number(b.potentialPayout) : -Number(b.stake),
-          positive: won,
-          at: b.settledAt ?? b.placedAt,
-        };
-      }),
-    ]
-      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-      .slice(0, 18);
+  const items = [
+    ...credits.map((c) => {
+      const amount = Number((c.metadata as any)?.amount ?? 0);
+      const note = (c.metadata as any)?.note ?? 'Balance update';
+      return { type: 'reward', text: note as string, amount, positive: amount >= 0, at: c.createdAt };
+    }),
+    ...bets.map((b) => {
+      const won = b.status === 'WON';
+      return {
+        type: 'bet',
+        text: `${won ? 'Prediction won' : 'Prediction lost'}: ${b.market.question}`,
+        amount: won ? Number(b.potentialPayout) : -Number(b.stake),
+        positive: won,
+        at: b.settledAt ?? b.placedAt,
+      };
+    }),
+    ...announcements.map((a) => ({
+      type: 'announcement',
+      text: (a.metadata as any)?.text ?? '',
+      amount: 0,
+      positive: true,
+      at: a.createdAt,
+    })),
+  ]
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    .slice(0, 20);
 
-    return items;
+  return items;
+}
+
+async broadcast(adminId: string, text: string) {
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: adminId,
+        action: 'ANNOUNCEMENT',
+        targetType: 'Broadcast',
+        targetId: 'all',
+        metadata: { text },
+      },
+    });
+    return { ok: true };
   }
+  
 }

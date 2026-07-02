@@ -12,6 +12,7 @@ import { Roles } from '../common/rbac/roles.decorator';
 import { AdminService } from './admin.service';
 import { PromoService } from '../promo/promo.service';
 import { SettingsService } from '../settings/settings.service';
+import { EngageService } from '../engage/engage.service';
 import { CreatePromoDto } from '../promo/dto';
 import {
   AdjustBalanceDto,
@@ -19,9 +20,9 @@ import {
   ResolveMarketDto,
   UpdateUserDto,
   UpdateSettingsDto,
+  BroadcastDto,
 } from './dto';
 
-// Class-level role guard: every route here requires an admin role.
 @Roles('ADMIN', 'SUPERADMIN')
 @Controller('admin')
 export class AdminController {
@@ -29,7 +30,13 @@ export class AdminController {
     private readonly admin: AdminService,
     private readonly promo: PromoService,
     private readonly settings: SettingsService,
+    private readonly engage: EngageService,
   ) {}
+
+  @Post('notifications/broadcast')
+  broadcast(@Req() req: any, @Body() dto: BroadcastDto) {
+    return this.engage.broadcast(req.user.id, dto.text);
+  }
 
   @Get('stats')
   stats() {

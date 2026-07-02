@@ -56,3 +56,8 @@ export class UpdateSettingsDto {
   @IsObject()
   data!: Record<string, any>;
 }
+
+export class BroadcastDto {
+  @IsString()
+  text!: string;
+}

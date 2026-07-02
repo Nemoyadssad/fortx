@@ -90,6 +90,8 @@ export const api = {
     settings: () => req('/admin/settings'),
     updateSettings: (data: any) => req('/admin/settings', { method: 'POST', body: JSON.stringify({ data }) }),
     resetSettings: () => req('/admin/settings/reset', { method: 'POST', body: JSON.stringify({}) }),
+    broadcast: (text: string) =>
+      req('/admin/notifications/broadcast', { method: 'POST', body: JSON.stringify({ text }) }),
   },
 
   devTopup: (amount: number) =>
@@ -163,7 +165,6 @@ export const api = {
     minesActive: () => req('/games/mines/active'),
     minesRecent: () => req('/games/mines/recent'),
 
-    // Tower + Ladder share the same engine; `game` is 'tower' or 'ladder'.
     climberStart: (game: string, stake: number, difficulty?: string) =>
       req(`/games/${game}/start`, {
         method: 'POST',
