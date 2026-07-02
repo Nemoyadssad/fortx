@@ -6,7 +6,7 @@ import { TOPIC_NAMES } from '@/lib/topics';
 import { useAuth } from '@/app/providers';
 import { fmtMoney, pct } from '@/lib/format';
 
-type Tab = 'dashboard' | 'users' | 'markets' | 'create' | 'support' | 'promos' | 'control';
+type Tab = 'dashboard' | 'users' | 'markets' | 'create' | 'support' | 'promos' | 'control' | 'broadcast';
 
 const ROLES = ['USER', 'SUPPORT', 'ADMIN', 'SUPERADMIN'];
 const STATUSES = ['ACTIVE', 'SUSPENDED', 'BANNED'];
@@ -51,6 +51,7 @@ export default function AdminPage() {
     { id: 'support', label: 'Support' },
     { id: 'promos', label: 'Promo codes' },
     { id: 'control', label: 'Game control' },
+    { id: 'broadcast', label: 'Broadcast' },
   ];
 
   return (
@@ -93,6 +94,7 @@ export default function AdminPage() {
         {tab === 'support' && <Support />}
         {tab === 'promos' && <Promos />}
         {tab === 'control' && <GameControl />}
+        {tab === 'broadcast' && <Broadcast />}
       </div>
     </div>
   );
@@ -643,6 +645,56 @@ function Support() {
   );
 }
 
+function Broadcast() {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function send() {
+    const body = text.trim();
+    if (!body) return;
+    if (!confirm(`Send this to ALL users?\n\n"${body}"`)) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api.admin.broadcast(body);
+      setMsg({ ok: true, text: 'Sent to all users.' });
+      setText('');
+    } catch (e: any) {
+      setMsg({ ok: false, text: e?.message || 'Could not send broadcast.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="max-w-2xl rounded-2xl panel p-6">
+      <h2 className="font-display text-lg font-bold">Broadcast notification</h2>
+      <p className="mt-1 text-sm text-fg/55">
+        Sends an announcement to every user&rsquo;s notification bell.
+      </p>
+      <div className="mt-4 space-y-3">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Message text…"
+          rows={4}
+          maxLength={500}
+          className="w-full resize-none rounded-xl border hairline bg-fg/[0.03] px-4 py-3 text-sm outline-none focus:border-gold/50"
+        />
+        <p className="text-right text-xs text-fg/35">{text.length}/500</p>
+        {msg && <p className={`text-sm ${msg.ok ? 'text-win' : 'text-lose'}`}>{msg.text}</p>}
+        <button
+          onClick={send}
+          disabled={busy || !text.trim()}
+          className="rounded-xl bg-gradient-to-b from-gold to-gold-soft px-6 py-3 font-bold text-black shadow-gold transition hover:brightness-105 disabled:opacity-50"
+        >
+          {busy ? 'Sending…' : 'Send to all users'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function Promos() {
   const [list, setList] = useState<any[]>([]);

@@ -15,7 +15,7 @@ type Round = {
   id: string; status: 'OPEN'|'SPINNING'|'CLOSED';
   pot: number; segments: Segment[];
   winnerId: string|null; winner: string|null;
-  createdAt: string; closedAt: string|null;
+  createdAt: string; closedAt: string|null; spinAt: string|null;
 };
 
 function JackpotWheel({ segments, spinning, winnerIdx }: { segments: Segment[]; spinning: boolean; winnerIdx: number }) {
@@ -136,12 +136,17 @@ export default function JackpotPage() {
   }, [load]);
 
   // Countdown timer when round has entries
-  useEffect(() => {
-    if (!hasEntries || round?.status !== 'OPEN') return;
-    setCountdown(20);
-    const t = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
+   useEffect(() => {
+    if (!hasEntries || round?.status !== 'OPEN' || !round?.spinAt) return;
+    const spinAt = new Date(round.spinAt).getTime();
+    const tick = () => {
+      const secs = Math.max(0, Math.round((spinAt - Date.now()) / 1000));
+      setCountdown(secs);
+    };
+    tick();
+    const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [round?.id, hasEntries, round?.status]);
+  }, [round?.id, round?.spinAt, hasEntries, round?.status]);
 
   async function enter() {
     if (!email) { window.dispatchEvent(new CustomEvent('predikt:auth')); return; }

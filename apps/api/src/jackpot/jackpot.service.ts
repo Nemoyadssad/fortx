@@ -232,6 +232,7 @@ export class JackpotService {
       seed: round.status === 'CLOSED' ? round.seed : null,
       createdAt: round.createdAt,
       closedAt: round.closedAt ?? null,
+      spinAt: round.spinAt ?? null,
     };
   }
 }
