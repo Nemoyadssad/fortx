@@ -117,6 +117,7 @@ export default function JackpotPage() {
   const [entering, setEntering] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(20);
+  const [forceSpin, setForceSpin] = useState(false);
   const hasEntries = (round?.segments?.length ?? 0) > 0;
 
   const load = useCallback(async () => {
@@ -131,17 +132,23 @@ export default function JackpotPage() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    const t = setInterval(load, 3000);
+    const t = setInterval(load, forceSpin ? 800 : 3000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, forceSpin]);
 
   // Countdown timer when round has entries
-   useEffect(() => {
+     useEffect(() => {
     if (!hasEntries || round?.status !== 'OPEN' || !round?.spinAt) return;
     const spinAt = new Date(round.spinAt).getTime();
     const tick = () => {
       const secs = Math.max(0, Math.round((spinAt - Date.now()) / 1000));
       setCountdown(secs);
+      if (secs === 0) {
+        // Trigger the wheel animation locally — the real SPINNING status
+        // on the server is too short-lived to reliably catch by polling.
+        setForceSpin(true);
+        setTimeout(() => setForceSpin(false), 4200);
+      }
     };
     tick();
     const t = setInterval(tick, 1000);
@@ -160,7 +167,7 @@ export default function JackpotPage() {
     } finally { setEntering(false); }
   }
 
-  const spinning = round?.status === 'SPINNING';
+  const spinning = round?.status === 'SPINNING' || forceSpin;
   const closed   = round?.status === 'CLOSED';
 
   // Build colorMap for player list
