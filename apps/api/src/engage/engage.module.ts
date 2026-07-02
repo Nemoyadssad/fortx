@@ -7,5 +7,6 @@ import { EngageController } from './engage.controller';
   imports: [WalletModule],
   providers: [EngageService],
   controllers: [EngageController],
+  exports: [EngageService],
 })
 export class EngageModule {}
