@@ -51,6 +51,7 @@ model User {
 jackpotWins    JackpotRound[] @relation("JackpotWins")
 jackpotEntries JackpotEntry[] @relation("JackpotEntries")
 payments       Payment[]
+notifications Notification[]
 
   referralCode String? @unique
   referredById String?
@@ -278,6 +279,23 @@ model AuditLog {
 
   @@index([actorId])
   @@index([action])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title     String
+  text      String
+
+  read      Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
 }
 
 // ---------------------------------------------------------------------------

@@ -263,12 +263,15 @@ export class EngageService {
       take: 10,
       select: { status: true, stake: true, potentialPayout: true, settledAt: true, placedAt: true, market: { select: { question: true } } },
     }),
-    this.prisma.auditLog.findMany({
-      where: { action: 'ANNOUNCEMENT' },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      select: { metadata: true, createdAt: true },
-    }),
+    this.prisma.notification.findMany({
+  where: {
+    userId,
+  },
+  orderBy: {
+    createdAt: 'desc',
+  },
+  take: 10,
+}),
   ]);
 
   const items = [
@@ -288,12 +291,12 @@ export class EngageService {
       };
     }),
     ...announcements.map((a) => ({
-      type: 'announcement',
-      text: (a.metadata as any)?.text ?? '',
-      amount: 0,
-      positive: true,
-      at: a.createdAt,
-    })),
+  type: 'announcement',
+  text: a.text,
+  amount: 0,
+  positive: true,
+  at: a.createdAt,
+})),
   ]
     .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
     .slice(0, 20);
@@ -302,16 +305,30 @@ export class EngageService {
 }
 
 async broadcast(adminId: string, text: string) {
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: adminId,
-        action: 'ANNOUNCEMENT',
-        targetType: 'Broadcast',
-        targetId: 'all',
-        metadata: { text },
-      },
-    });
-    return { ok: true };
-  }
-  
+  const users = await this.prisma.user.findMany({
+    select: {
+      id: true,
+    },
+  });
+
+  await this.prisma.notification.createMany({
+    data: users.map((u) => ({
+      userId: u.id,
+      title: 'Announcement',
+      text,
+    })),
+  });
+
+  await this.prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: 'ANNOUNCEMENT',
+      targetType: 'Broadcast',
+      targetId: 'all',
+      metadata: { text },
+    },
+  });
+
+  return { ok: true };
+}
 }

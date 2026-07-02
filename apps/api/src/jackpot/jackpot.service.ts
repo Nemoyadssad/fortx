@@ -56,44 +56,50 @@ export class JackpotService {
 
   /** Enter the current round */
   async enter(userId: string, amount: number) {
-    if (!Number.isFinite(amount) || amount < MIN_STAKE || amount > MAX_STAKE) {
-      throw new BadRequestException(`Stake must be between $${MIN_STAKE} and $${MAX_STAKE}.`);
-    }
-
-    const round = await this.prisma.jackpotRound.findFirst({
-      where: { status: 'OPEN' },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (!round) throw new BadRequestException('No open round right now.');
-
-    await this.prisma.$transaction(async (tx) => {
-      const userCash = await tx.ledgerAccount.findFirstOrThrow({ where: { ownerId: userId, type: AccountType.USER_CASH } });
-      const house    = await tx.ledgerAccount.findFirstOrThrow({ where: { type: AccountType.SYSTEM_HOUSE } });
-      if (Number(userCash.balance) < amount) throw new BadRequestException('Insufficient balance.');
-      await tx.ledgerTransaction.create({
-        data: {
-          kind: TxnKind.GAME_STAKE,
-          reference: `jackpot:${round.id}:${userId}`,
-          entries: { create: [
-            { accountId: userCash.id, amount: -amount },
-            { accountId: house.id,    amount: amount },
-          ]},
-        },
-      });
-      await tx.jackpotEntry.create({ data: { roundId: round.id, userId, amount } });
-
-      // Первый вход в раунд фиксирует время спина в БД — переживает рестарт процесса.
-      await tx.jackpotRound.update({
-        where: { id: round.id },
-        data: {
-          pot: { increment: amount },
-          spinAt: round.spinAt ?? new Date(Date.now() + SPIN_DELAY_MS),
-        },
-      });
-    });
-
-    return this.current();
+  if (!Number.isFinite(amount) || amount < MIN_STAKE || amount > MAX_STAKE) {
+    throw new BadRequestException(`Stake must be between $${MIN_STAKE} and $${MAX_STAKE}.`);
   }
+
+  const round = await this.prisma.jackpotRound.findFirst({
+    where: { status: 'OPEN' },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!round) throw new BadRequestException('No open round right now.');
+
+  await this.prisma.$transaction(async (tx) => {
+    const userCash = await tx.ledgerAccount.findFirstOrThrow({ where: { ownerId: userId, type: AccountType.USER_CASH } });
+    const house    = await tx.ledgerAccount.findFirstOrThrow({ where: { type: AccountType.SYSTEM_HOUSE } });
+    if (Number(userCash.balance) < amount) throw new BadRequestException('Insufficient balance.');
+
+    await tx.ledgerTransaction.create({
+      data: {
+        kind: TxnKind.GAME_STAKE,
+        reference: `jackpot:${round.id}:${userId}`,
+        entries: { create: [
+          { accountId: userCash.id, amount: -amount },
+          { accountId: house.id,    amount: amount },
+        ]},
+      },
+    });
+
+    // Кэш баланса обновляем в той же транзакции, что и проводки.
+    await tx.ledgerAccount.update({ where: { id: userCash.id }, data: { balance: { decrement: amount } } });
+    await tx.ledgerAccount.update({ where: { id: house.id },    data: { balance: { increment: amount } } });
+
+    await tx.jackpotEntry.create({ data: { roundId: round.id, userId, amount } });
+
+    // Один инкремент пота, один спинAt — без побочных апдейтов/раундов.
+    await tx.jackpotRound.update({
+      where: { id: round.id },
+      data: {
+        pot: { increment: amount },
+        spinAt: round.spinAt ?? new Date(Date.now() + SPIN_DELAY_MS),
+      },
+    });
+  });
+
+  return this.current();
+}
 
   /** Проверяем раз в несколько секунд, не пора ли крутить какой-то раунд. */
   @Interval(3000)
@@ -149,6 +155,7 @@ export class JackpotService {
       await this.prisma.$transaction(async (tx) => {
         const winnerCash = await tx.ledgerAccount.findFirstOrThrow({ where: { ownerId: winnerId, type: AccountType.USER_CASH } });
         const house      = await tx.ledgerAccount.findFirstOrThrow({ where: { type: AccountType.SYSTEM_HOUSE } });
+
         await tx.ledgerTransaction.create({
           data: {
             kind: TxnKind.GAME_PAYOUT,
@@ -159,6 +166,10 @@ export class JackpotService {
             ]},
           },
         });
+
+        await tx.ledgerAccount.update({ where: { id: house.id },      data: { balance: { decrement: payout } } });
+        await tx.ledgerAccount.update({ where: { id: winnerCash.id }, data: { balance: { increment: payout } } });
+
         await tx.jackpotRound.update({
           where: { id: roundId },
           data: { status: 'CLOSED', winnerId, closedAt: new Date() },

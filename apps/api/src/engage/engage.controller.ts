@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import { EngageService } from './engage.service';
 import { Public } from '../common/auth/public.decorator';
-import { ClaimMissionDto } from './dto';
+import { Roles } from '../common/rbac/roles.decorator';
+import { Role } from '@prisma/client';
+import { ClaimMissionDto, BroadcastDto } from './dto';
 
 @Controller()
 export class EngageController {
@@ -37,5 +39,11 @@ export class EngageController {
   @Get('notifications/me')
   notifications(@Req() req: any) {
     return this.engage.notifications(req.user.id);
+  }
+
+  @Roles(Role.ADMIN, Role.SUPERADMIN)
+  @Post('admin/notifications/broadcast')
+  broadcast(@Req() req: any, @Body() dto: BroadcastDto) {
+    return this.engage.broadcast(req.user.id, dto.text);
   }
 }
