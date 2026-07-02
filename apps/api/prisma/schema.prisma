@@ -420,6 +420,7 @@ model JackpotRound {
   createdAt  DateTime      @default(now())
   closedAt   DateTime?
   entries    JackpotEntry[]
+   spinAt DateTime?
 }
 
 model JackpotEntry {

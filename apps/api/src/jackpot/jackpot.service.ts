@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { LedgerService } from '../ledger/ledger.service';
@@ -13,7 +13,6 @@ const HOUSE_CUT = 0.05;       // 5 % rake
 @Injectable()
 export class JackpotService {
   private readonly logger = new Logger(JackpotService.name);
-  private spinTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -67,7 +66,6 @@ export class JackpotService {
     });
     if (!round) throw new BadRequestException('No open round right now.');
 
-    // Deduct stake from user balance → house escrow
     await this.prisma.$transaction(async (tx) => {
       const userCash = await tx.ledgerAccount.findFirstOrThrow({ where: { ownerId: userId, type: AccountType.USER_CASH } });
       const house    = await tx.ledgerAccount.findFirstOrThrow({ where: { type: AccountType.SYSTEM_HOUSE } });
@@ -83,31 +81,56 @@ export class JackpotService {
         },
       });
       await tx.jackpotEntry.create({ data: { roundId: round.id, userId, amount } });
-      await tx.jackpotRound.update({ where: { id: round.id }, data: { pot: { increment: amount } } });
-    });
 
-    // Schedule spin if not already scheduled
-    if (!this.spinTimer) {
-      this.spinTimer = setTimeout(() => this.spin(round.id), SPIN_DELAY_MS);
-    }
+      // Первый вход в раунд фиксирует время спина в БД — переживает рестарт процесса.
+      await tx.jackpotRound.update({
+        where: { id: round.id },
+        data: {
+          pot: { increment: amount },
+          spinAt: round.spinAt ?? new Date(Date.now() + SPIN_DELAY_MS),
+        },
+      });
+    });
 
     return this.current();
   }
 
+  /** Проверяем раз в несколько секунд, не пора ли крутить какой-то раунд. */
+  @Interval(3000)
+  async checkDueSpins() {
+    const due = await this.prisma.jackpotRound.findMany({
+      where: { status: 'OPEN', spinAt: { lte: new Date() } },
+      select: { id: true },
+    });
+    for (const r of due) {
+      await this.spin(r.id);
+    }
+  }
+
   /** Pick winner and pay out */
   async spin(roundId: string) {
-    this.spinTimer = null;
     try {
+      // Атомарно переводим OPEN -> SPINNING. Если апдейт затронул 0 строк —
+      // значит раунд уже кто-то забрал (другой вызов/инстанс) — выходим.
+      const claimed = await this.prisma.jackpotRound.updateMany({
+        where: { id: roundId, status: 'OPEN' },
+        data: { status: 'SPINNING' },
+      });
+      if (claimed.count === 0) return;
+
       const round = await this.prisma.jackpotRound.findUnique({
         where: { id: roundId },
         include: { entries: true },
       });
-      if (!round || round.status !== 'OPEN') return;
+      if (!round || round.entries.length === 0) {
+        // Некому крутить — просто закрываем без победителя, чтобы не зависал.
+        await this.prisma.jackpotRound.update({
+          where: { id: roundId },
+          data: { status: 'CLOSED', closedAt: new Date() },
+        });
+        return;
+      }
 
-      // Mark SPINNING
-      await this.prisma.jackpotRound.update({ where: { id: roundId }, data: { status: 'SPINNING' } });
-
-      // Weighted random pick
       const seed = round.seed + Date.now().toString();
       const hash = createHash('sha256').update(seed).digest('hex');
       const roll = parseInt(hash.slice(0, 8), 16);
@@ -122,7 +145,6 @@ export class JackpotService {
         if (point <= cursor) { winnerId = e.userId; break; }
       }
 
-      // Pay winner (pot minus rake)
       const payout = +(pot * (1 - HOUSE_CUT)).toFixed(2);
       await this.prisma.$transaction(async (tx) => {
         const winnerCash = await tx.ledgerAccount.findFirstOrThrow({ where: { ownerId: winnerId, type: AccountType.USER_CASH } });
@@ -145,13 +167,18 @@ export class JackpotService {
 
       this.logger.log(`Jackpot ${roundId}: winner ${winnerId}, payout $${payout}`);
 
-      // Open next round after 8 s
       setTimeout(() => this.prisma.jackpotRound.create({
         data: { status: 'OPEN', seed: randomBytes(16).toString('hex') },
       }).catch(() => {}), 8_000);
 
     } catch (e) {
       this.logger.error('Jackpot spin error', e);
+      // Откатываем в OPEN, чтобы следующий тик @Interval мог попробовать снова,
+      // а не оставлял раунд навечно в SPINNING.
+      await this.prisma.jackpotRound.updateMany({
+        where: { id: roundId, status: 'SPINNING' },
+        data: { status: 'OPEN' },
+      }).catch(() => {});
     }
   }
 
