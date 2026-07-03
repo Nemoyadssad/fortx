@@ -92,6 +92,8 @@ export const api = {
     resetSettings: () => req('/admin/settings/reset', { method: 'POST', body: JSON.stringify({}) }),
     broadcast: (text: string) =>
       req('/admin/notifications/broadcast', { method: 'POST', body: JSON.stringify({ text }) }),
+    resetPassword: (id: string) =>
+      req(`/admin/users/${id}/reset-password`, { method: 'POST' }),
   },
 
   devTopup: (amount: number) =>

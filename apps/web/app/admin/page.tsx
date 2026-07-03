@@ -195,6 +195,20 @@ function Users() {
     }
   }
 
+  async function resetPassword(id: string, email: string) {
+    if (!confirm(`Сбросить пароль для ${email}?`)) return;
+    try {
+      const r = await api.admin.resetPassword(id);
+      setMsg(
+        r?.tempPassword
+          ? `Новый пароль для ${email}: ${r.tempPassword}`
+          : `Письмо для сброса пароля отправлено на ${email}.`,
+      );
+    } catch (e: any) {
+      setMsg(e?.message || 'Не удалось сбросить пароль');
+    }
+  }
+
   return (
     <div className="rounded-2xl panel">
       {msg && <p className="border-b hairline px-5 py-3 text-sm text-gold-deep">{msg}</p>}
@@ -208,6 +222,7 @@ function Users() {
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Adjust balance</th>
               <th className="px-4 py-3">Report</th>
+              <th className="px-4 py-3">Password</th>
             </tr>
           </thead>
           <tbody>
@@ -266,6 +281,14 @@ function Users() {
                     className="rounded-lg border hairline px-3 py-1 text-fg/70 transition hover:border-gold/40 hover:text-gold-deep"
                   >
                     View
+                  </button>
+                </td>
+                <td className="px-4 py-3">
+                  <button
+                    onClick={() => resetPassword(u.id, u.email)}
+                    className="rounded-lg border hairline px-3 py-1 text-fg/70 transition hover:border-lose/40 hover:text-lose"
+                  >
+                    Reset password
                   </button>
                 </td>
               </tr>
