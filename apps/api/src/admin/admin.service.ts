@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import * as argon2 from 'argon2';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 
@@ -155,6 +157,36 @@ export class AdminService {
       },
     });
     return { id: updated.id, role: updated.role, status: updated.status };
+  }
+
+  /**
+   * Admin-initiated password reset. Never reads the old password (it's a
+   * one-way hash and can't be recovered) — instead sets a brand-new one.
+   * If `newPassword` isn't supplied, a random temporary password is
+   * generated and returned once so the admin can hand it to the user.
+   */
+  async resetUserPassword(id: string, actorId: string, newPassword?: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('User not found.');
+
+    const plain = newPassword && newPassword.length >= 8 ? newPassword : randomBytes(6).toString('base64url');
+    const passwordHash = await argon2.hash(plain);
+
+    await this.prisma.user.update({ where: { id }, data: { passwordHash } });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'USER_PASSWORD_RESET',
+        targetType: 'User',
+        targetId: id,
+        // Never log the password itself, only that a reset happened.
+        metadata: { generated: !newPassword },
+      },
+    });
+
+    // Returned once, not persisted anywhere in plaintext — the admin must
+    // copy it now and pass it to the user themselves.
+    return { id, temporaryPassword: plain };
   }
 
   adjustBalance(id: string, amount: number, note: string | undefined, actorId: string) {

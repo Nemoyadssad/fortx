@@ -13,29 +13,15 @@ import { useI18n } from '@/lib/i18n';
 import { fmtMoney } from '@/lib/format';
 
 export function Nav() {
-  const { email, balances, logout, loading, refreshBalance } = useAuth();
+  const { email, balances, logout, loading } = useAuth();
   const { t } = useI18n();
   const [authOpen, setAuthOpen] = useState(false);
-  const [topupBusy, setTopupBusy] = useState(false);
-  const showTopup = process.env.NEXT_PUBLIC_DEV_TOPUP !== 'false';
   const pathname = usePathname();
   const [q, setQ] = useState('');
 
   function onSearch(v: string) {
     setQ(v);
     window.dispatchEvent(new CustomEvent('predikt:search', { detail: v }));
-  }
-
-  async function topup() {
-    setTopupBusy(true);
-    try {
-      await api.devTopup(1000);
-      await refreshBalance();
-    } catch {
-      /* ignore */
-    } finally {
-      setTopupBusy(false);
-    }
   }
 
   useEffect(() => {
@@ -95,16 +81,13 @@ export function Nav() {
                   <Wallet className="h-4 w-4 text-gold-deep" />
                   <span className="font-mono text-sm font-bold tabular-nums text-gold-deep">{balances ? fmtMoney(balances.cash) : '—'}</span>
                 </a>
-                {showTopup && (
-                  <button
-                    onClick={topup}
-                    disabled={topupBusy}
-                    title="Add test balance"
-                    className="rounded-xl border border-win/30 bg-win/[0.06] p-2 text-win transition hover:bg-win/10 disabled:opacity-50"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                )}
+                <a
+                  href="/cashier"
+                  title="Пополнить"
+                  className="rounded-xl border border-win/30 bg-win/[0.06] p-2 text-win transition hover:bg-win/10"
+                >
+                  <Plus className="h-4 w-4" />
+                </a>
                 <button onClick={logout} title="Log out" className="rounded-xl border hairline p-2 text-fg/50 transition hover:text-fg lg:hidden">
                   <LogOut className="h-4 w-4" />
                 </button>

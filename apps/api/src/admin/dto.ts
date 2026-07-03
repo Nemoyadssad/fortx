@@ -1,4 +1,4 @@
-import { ArrayMinSize, IsArray, IsIn, IsNumber, IsObject, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsIn, IsNumber, IsObject, IsOptional, IsString, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UpdateUserDto {
@@ -60,4 +60,12 @@ export class UpdateSettingsDto {
 export class BroadcastDto {
   @IsString()
   text!: string;
+}
+
+export class ResetPasswordDto {
+  // Необязательно: если не передан — сгенерируется случайный временный пароль.
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  password?: string;
 }

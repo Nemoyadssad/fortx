@@ -21,6 +21,7 @@ import {
   UpdateUserDto,
   UpdateSettingsDto,
   BroadcastDto,
+  ResetPasswordDto,
 } from './dto';
 
 @Roles('ADMIN', 'SUPERADMIN')
@@ -56,6 +57,11 @@ export class AdminController {
   @Patch('users/:id')
   updateUser(@Req() req: any, @Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.admin.updateUser(id, dto, req.user.id);
+  }
+
+  @Post('users/:id/reset-password')
+  resetPassword(@Req() req: any, @Param('id') id: string, @Body() dto: ResetPasswordDto) {
+    return this.admin.resetUserPassword(id, req.user.id, dto.password);
   }
 
   @Post('users/:id/adjust')
