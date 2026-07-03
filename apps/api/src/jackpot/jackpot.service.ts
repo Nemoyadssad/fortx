@@ -65,13 +65,28 @@ export class JackpotService {
     });
     return rounds.map((r: any) => this.serialize(r));
   }
-
+/** Get one specific round by id, whatever its status — used by the client
+   *  to reliably poll the outcome of the round it's animating, without
+   *  racing against current() reassigning a new round. */
+  async getRound(id: string) {
+    const round = await this.prisma.jackpotRound.findUnique({
+      where: { id },
+      include: {
+        entries: { include: { user: { select: { id: true, email: true, displayName: true } } } },
+        winner: { select: { id: true, email: true, displayName: true } },
+      },
+    });
+    if (!round) return null;
+    return this.serialize(round);
+  }
+  
   /** Enter the current round */
   async enter(userId: string, amount: number) {
   if (!Number.isFinite(amount) || amount < MIN_STAKE || amount > MAX_STAKE) {
     throw new BadRequestException(`Stake must be between $${MIN_STAKE} and $${MAX_STAKE}.`);
   }
 
+  
   const round = await this.prisma.jackpotRound.findFirst({
     where: { status: 'OPEN' },
     orderBy: { createdAt: 'desc' },

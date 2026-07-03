@@ -18,24 +18,20 @@ type Round = {
   createdAt: string; closedAt: string|null; spinAt: string|null;
 };
 
-// Computes the rotation (in degrees, unbounded) that lands the winner's
-// sector on the pointer (fixed at angle 0 / 3 o'clock).
 function computeTargetRotation(segments: Segment[], winnerId: string, fromRotation: number): number {
   let angle = 0;
   let winnerMid = 0;
-  let found = false;
   for (const seg of segments) {
-    const sweep = seg.pct * 3.6; // pct -> degrees
-    if (!found && seg.userId === winnerId) {
+    const sweep = seg.pct * 3.6;
+    if (seg.userId === winnerId) {
       winnerMid = angle + sweep / 2;
-      found = true;
       break;
     }
     angle += sweep;
   }
   const normalizedFrom = ((fromRotation % 360) + 360) % 360;
   const delta = ((-winnerMid - normalizedFrom) % 360 + 360) % 360;
-  const extraSpins = 4; // a few extra full turns for effect
+  const extraSpins = 4;
   return fromRotation + extraSpins * 360 + delta;
 }
 
@@ -121,12 +117,13 @@ export default function JackpotPage() {
   const [countdown, setCountdown] = useState(20);
   const [wheelPhase, setWheelPhase] = useState<WheelPhase>('idle');
   const [rotation, setRotation] = useState(0);
+  const [resultRound, setResultRound] = useState<Round | null>(null);
   const rotationRef = useRef(0);
-  const anticipatingRoundId = useRef<string | null>(null);
+  const spinTargetId = useRef<string | null>(null);
   const revealTarget = useRef<number | null>(null);
-   const anticipatingStartedAt = useRef<number | null>(null);
   const hasEntries = (round?.segments?.length ?? 0) > 0;
 
+  // Regular polling of "current" — drives the countdown / entry list while idle.
   const load = useCallback(async () => {
     try {
       const [cur, hist] = await Promise.all([
@@ -138,17 +135,14 @@ export default function JackpotPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
-  // Poll faster while the wheel is anticipating/revealing so we catch the
-  // server's result as soon as it's ready.
   useEffect(() => {
-    const fast = wheelPhase === 'anticipating' || wheelPhase === 'revealing';
-    const t = setInterval(load, fast ? 800 : 3000);
+    // Slow down (or pause) generic polling while we're actively resolving a spin —
+    // the dedicated resolver loop below handles that case on its own.
+    const t = setInterval(load, wheelPhase === 'idle' ? 3000 : 4000);
     return () => clearInterval(t);
   }, [load, wheelPhase]);
 
-  // Countdown timer, derived from the server's spinAt. When it hits 0 we
-  // start the "anticipating" fast-spin — the real outcome arrives shortly after.
+  // Countdown timer, derived from the server's spinAt.
   useEffect(() => {
     if (!hasEntries || round?.status !== 'OPEN' || !round?.spinAt) return;
     const spinAt = new Date(round.spinAt).getTime();
@@ -157,8 +151,7 @@ export default function JackpotPage() {
       const secs = Math.max(0, Math.min(30, raw));
       setCountdown(secs);
       if (secs === 0 && wheelPhase === 'idle') {
-        anticipatingRoundId.current = round.id;
-        anticipatingStartedAt.current = Date.now();
+        spinTargetId.current = round.id;
         setWheelPhase('anticipating');
       }
     };
@@ -167,7 +160,7 @@ export default function JackpotPage() {
     return () => clearInterval(t);
   }, [round?.id, round?.spinAt, hasEntries, round?.status, wheelPhase]);
 
-  // Fast spin while waiting for the server to confirm the result.
+  // Fast spin while we wait for a definitive result.
   useEffect(() => {
     if (wheelPhase !== 'anticipating') return;
     let raf: number;
@@ -180,40 +173,55 @@ export default function JackpotPage() {
     return () => cancelAnimationFrame(raf);
   }, [wheelPhase]);
 
-  // Once the server confirms this exact round is CLOSED with a winner,
-  // compute the landing angle and switch to the reveal animation.
+  // THE RESOLVER: polls the SPECIFIC round id directly (not "current"),
+  // so it can never be fooled by current() moving on to a new round.
+  // Keeps trying every 700ms for up to 20s — effectively guaranteed to
+  // catch the CLOSED state since the backend closes within ~1-2s of spinAt.
   useEffect(() => {
     if (wheelPhase !== 'anticipating') return;
-    if (round?.id !== anticipatingRoundId.current) return;
-    if (round?.status === 'CLOSED' && round.winnerId) {
-      revealTarget.current = computeTargetRotation(round.segments, round.winnerId, rotationRef.current);
-      setWheelPhase('revealing');
-    }
-  }, [round, wheelPhase]);
+    const targetId = spinTargetId.current;
+    if (!targetId) { setWheelPhase('idle'); return; }
 
-  // Safety net: if we're stuck anticipating for too long (missed poll window,
-  // backgrounded tab, etc.), resolve from the history list instead of
-  // spinning forever.
-  useEffect(() => {
-    if (wheelPhase !== 'anticipating') return;
-    const t = setTimeout(() => {
-      const targetId = anticipatingRoundId.current;
-      if (!targetId) { setWheelPhase('idle'); return; }
-      const fromHistory = history.find(h => h.id === targetId);
-      if (fromHistory?.winnerId) {
-        revealTarget.current = computeTargetRotation(fromHistory.segments, fromHistory.winnerId, rotationRef.current);
-        setWheelPhase('revealing');
-      } else {
-        // Truly can't resolve it — bail out instead of spinning forever.
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 28; // ~20s at 700ms
+
+    const poll = async () => {
+      if (cancelled) return;
+      attempts++;
+      try {
+        const r: Round | null = await (api as any).jackpot.round(targetId);
+        if (cancelled) return;
+        if (r && r.status === 'CLOSED') {
+          if (r.winnerId) {
+            setResultRound(r);
+            revealTarget.current = computeTargetRotation(r.segments, r.winnerId, rotationRef.current);
+            setWheelPhase('revealing');
+          } else {
+            // Closed with no winner (e.g. round had no entries) — just reset.
+            setWheelPhase('idle');
+            rotationRef.current = 0;
+            setRotation(0);
+          }
+          return;
+        }
+      } catch { /* keep retrying */ }
+
+      if (attempts >= maxAttempts) {
+        // Give up gracefully rather than spin forever.
         setWheelPhase('idle');
         rotationRef.current = 0;
         setRotation(0);
+        return;
       }
-    }, 10000); // give the normal path 10s before falling back
-    return () => clearTimeout(t);
-  }, [wheelPhase, history]);
-  
-  // Decelerate smoothly onto the winner's sector.
+      setTimeout(poll, 700);
+    };
+    poll();
+
+    return () => { cancelled = true; };
+  }, [wheelPhase]);
+
+  // Smooth deceleration onto the winner's sector.
   useEffect(() => {
     if (wheelPhase !== 'revealing' || revealTarget.current == null) return;
     const start = rotationRef.current;
@@ -237,29 +245,20 @@ export default function JackpotPage() {
     return () => cancelAnimationFrame(raf);
   }, [wheelPhase]);
 
-  // If the page loads while a round is already closed (mid cooldown),
-  // show the winner immediately without animating from scratch.
+  // After showing the winner for a bit, go back to idle and let the normal
+  // poller pick up whatever round is current now.
   useEffect(() => {
-    if (!round) return;
-    if (wheelPhase === 'idle' && round.status === 'CLOSED' && round.winnerId && anticipatingRoundId.current !== round.id) {
-      const target = computeTargetRotation(round.segments, round.winnerId, 0);
-      rotationRef.current = target;
-      setRotation(target);
-      anticipatingRoundId.current = round.id;
-      setWheelPhase('done');
-    }
-  }, [round?.id, round?.status, wheelPhase]);
-
-  // When a genuinely new round starts (cooldown over), reset the wheel.
-  useEffect(() => {
-    if (!round) return;
-    if (wheelPhase === 'done' && round.id !== anticipatingRoundId.current) {
+    if (wheelPhase !== 'done') return;
+    const t = setTimeout(() => {
       setWheelPhase('idle');
+      setResultRound(null);
       rotationRef.current = 0;
       setRotation(0);
-      revealTarget.current = null;
-    }
-  }, [round?.id, wheelPhase]);
+      spinTargetId.current = null;
+      load();
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [wheelPhase, load]);
 
   async function enter() {
     if (!email) { window.dispatchEvent(new CustomEvent('predikt:auth')); return; }
@@ -274,9 +273,12 @@ export default function JackpotPage() {
   }
 
   const spinning = wheelPhase === 'anticipating' || wheelPhase === 'revealing';
-  const showWinner = wheelPhase === 'done' && round?.status === 'CLOSED' && round?.winner;
+  const showWinner = wheelPhase === 'done' && resultRound?.winner;
+  const displaySegments = spinning || wheelPhase === 'done'
+    ? (resultRound?.segments ?? round?.segments ?? [])
+    : (round?.segments ?? []);
 
-  const uniqUsers = [...new Set((round?.segments ?? []).map(s => s.userId))];
+  const uniqUsers = [...new Set(displaySegments.map(s => s.userId))];
   const colorMap: Record<string, string> = {};
   uniqUsers.forEach((uid, i) => { colorMap[uid] = COLORS[i % COLORS.length]; });
 
@@ -296,10 +298,12 @@ export default function JackpotPage() {
         <div className="flex flex-col items-center gap-5 rounded-3xl border hairline panel p-6">
           <div className="text-center">
             <p className="font-mono text-[11px] uppercase tracking-widest text-fg/40">Total pot</p>
-            <p className="font-display text-5xl font-bold gold-text">{round ? fmtMoney(round.pot) : '—'}</p>
+            <p className="font-display text-5xl font-bold gold-text">
+              {wheelPhase === 'idle' ? (round ? fmtMoney(round.pot) : '—') : fmtMoney((resultRound ?? round)?.pot ?? 0)}
+            </p>
           </div>
 
-          <JackpotWheel segments={round?.segments ?? []} rotation={rotation} />
+          <JackpotWheel segments={displaySegments} rotation={rotation} />
 
           {spinning && (
             <div className="flex items-center gap-2 rounded-xl bg-gold/15 px-4 py-2 text-sm font-semibold text-gold-deep">
@@ -309,8 +313,8 @@ export default function JackpotPage() {
           {showWinner && (
             <div className="rounded-xl bg-win/15 px-6 py-3 text-center">
               <p className="text-xs text-fg/50">Winner</p>
-              <p className="font-display text-xl font-bold text-win">{round!.winner}</p>
-              <p className="text-sm text-fg/60">took {fmtMoney(round!.pot * 0.95)}</p>
+              <p className="font-display text-xl font-bold text-win">{resultRound!.winner}</p>
+              <p className="text-sm text-fg/60">took {fmtMoney(resultRound!.pot * 0.95)}</p>
             </div>
           )}
           {round?.status === 'OPEN' && hasEntries && wheelPhase === 'idle' && (
@@ -319,7 +323,7 @@ export default function JackpotPage() {
               Spinning in <span className="font-mono font-bold text-gold-deep">{countdown}s</span>
             </div>
           )}
-          {round?.status === 'OPEN' && !hasEntries && (
+          {round?.status === 'OPEN' && !hasEntries && wheelPhase === 'idle' && (
             <p className="text-sm text-fg/40">Be the first to enter!</p>
           )}
         </div>
@@ -354,14 +358,14 @@ export default function JackpotPage() {
           <div className="rounded-2xl panel p-5">
             <div className="mb-3 flex items-center gap-2">
               <Users className="h-4 w-4 text-fg/40" />
-              <h2 className="font-display font-semibold">Players ({round?.segments.length ?? 0})</h2>
-              <span className="ml-auto font-mono text-xs text-fg/40">{round?.segments.length ?? 0} entries</span>
+              <h2 className="font-display font-semibold">Players ({displaySegments.length})</h2>
+              <span className="ml-auto font-mono text-xs text-fg/40">{displaySegments.length} entries</span>
             </div>
             <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
-              {(round?.segments ?? []).length === 0 ? (
+              {displaySegments.length === 0 ? (
                 <p className="text-sm text-fg/40">No entries yet…</p>
               ) : (
-                [...(round?.segments ?? [])]
+                [...displaySegments]
                   .sort((a, b) => b.amount - a.amount)
                   .map(seg => (
                     <PlayerRow key={seg.id} seg={seg} color={colorMap[seg.userId] ?? '#888'} isMe={false} />

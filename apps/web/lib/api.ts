@@ -130,6 +130,7 @@ export const api = {
   jackpot: {
     current: () => req('/jackpot/current'),
     history: () => req('/jackpot/history'),
+    round: (id: string) => req(`/jackpot/round/${id}`),
     enter: (amount: number) => req('/jackpot/enter', { method: 'POST', body: JSON.stringify({ amount }) }),
   },
   sellBet: (id: string) => req(`/bets/${id}/sell`, { method: 'DELETE' }),

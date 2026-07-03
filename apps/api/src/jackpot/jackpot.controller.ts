@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Request } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Request } from '@nestjs/common';
 import { JackpotService } from './jackpot.service';
 import { Public } from '../common/auth/public.decorator';
 
@@ -13,6 +13,10 @@ export class JackpotController {
   @Public()
   @Get('history')
   history() { return this.jackpot.history(); }
+
+  @Public()
+  @Get('round/:id')
+  round(@Param('id') id: string) { return this.jackpot.getRound(id); }
 
   @Post('enter')
   enter(@Request() req: any, @Body() body: { amount: number }) {
