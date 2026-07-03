@@ -39,7 +39,9 @@ function hexToRgba(hex: string, a: number) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 function shade(hex: string, amt: number) {
+  if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) return '#888888';
   const n = parseInt(hex.slice(1), 16);
+  if (Number.isNaN(n)) return '#888888';
   const r = Math.min(255, Math.max(0, ((n >> 16) & 255) + amt));
   const g = Math.min(255, Math.max(0, ((n >> 8) & 255) + amt));
   const b = Math.min(255, Math.max(0, (n & 255) + amt));
@@ -73,9 +75,9 @@ function JackpotWheel({ segments, rotation, pulsing }: { segments: Segment[]; ro
 
     if (segments.length === 0) {
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgb(var(--panel2))'; ctx.fill();
-      ctx.strokeStyle = 'rgb(var(--fg) / 0.08)'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = 'rgb(var(--fg) / 0.3)';
+      ctx.fillStyle = '#1a1a24'; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.font = '600 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('Waiting for players…', cx, cy);
       return;
@@ -88,7 +90,7 @@ function JackpotWheel({ segments, rotation, pulsing }: { segments: Segment[]; ro
 
     for (const seg of segments) {
       const sweep = (seg.pct / 100) * 2 * Math.PI;
-      const base = colorMap[seg.userId];
+     const base = colorMap[seg.userId] ?? '#888888';
       const grad = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
       grad.addColorStop(0, shade(base, 35));
       grad.addColorStop(1, base);
@@ -96,9 +98,8 @@ function JackpotWheel({ segments, rotation, pulsing }: { segments: Segment[]; ro
       ctx.beginPath(); ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, r, startAngle, startAngle + sweep);
       ctx.closePath();
-      ctx.fillStyle = grad; ctx.fill();
-      ctx.strokeStyle = 'rgb(var(--bg))'; ctx.lineWidth = 3; ctx.stroke();
-
+     ctx.fillStyle = grad; ctx.fill();
+      ctx.strokeStyle = '#0a0a0f'; ctx.lineWidth = 3; ctx.stroke();
       if (seg.pct > 5) {
         const mid = startAngle + sweep / 2;
         const lx = cx + Math.cos(mid) * r * 0.66;
@@ -115,10 +116,10 @@ function JackpotWheel({ segments, rotation, pulsing }: { segments: Segment[]; ro
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(245,197,66,0.35)'; ctx.lineWidth = 2; ctx.stroke();
 
-    // center hub
+   // center hub
     const hub = ctx.createRadialGradient(cx, cy, 2, cx, cy, 30);
     hub.addColorStop(0, '#3a2f10');
-    hub.addColorStop(1, 'rgb(var(--bg))');
+    hub.addColorStop(1, '#0a0a0f');
     ctx.beginPath(); ctx.arc(cx, cy, 30, 0, Math.PI * 2);
     ctx.fillStyle = hub; ctx.fill();
     ctx.strokeStyle = '#f5c542'; ctx.lineWidth = 3; ctx.stroke();
@@ -221,7 +222,7 @@ function PlayerRow({ seg, color, rank }: { seg: Segment; color: string; rank: nu
       <div className="relative flex items-center gap-3">
         <div
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
-          style={{ background: `linear-gradient(135deg, ${color}, ${shade(color.startsWith('#') ? color : '#888', -30)})`, boxShadow: `0 0 0 2px rgb(var(--panel))` }}
+          style={{ background: `linear-gradient(135deg, ${color}, ${shade(color, -30)})`, boxShadow: `0 0 0 2px rgb(var(--panel))` }}
         >
           {initials(seg.name)}
         </div>
