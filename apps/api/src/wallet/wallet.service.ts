@@ -4,6 +4,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { SettingsService } from '../settings/settings.service';
 
+const MIN_DEPOSIT = 10;
+const MIN_WITHDRAWAL = 50;
+
 @Injectable()
 export class WalletService {
   constructor(
@@ -163,6 +166,7 @@ export class WalletService {
   ) {
     const amt = new Prisma.Decimal(amount);
     if (amt.lte(0)) throw new BadRequestException('Deposit must be positive.');
+    if (amt.lt(MIN_DEPOSIT)) throw new BadRequestException(`Minimum deposit is $${MIN_DEPOSIT}.`);
 
     return this.prisma.$transaction(async (tx) => {
       const cash = await this.userCash(tx, userId);
@@ -191,6 +195,7 @@ export class WalletService {
   ) {
     const amt = new Prisma.Decimal(amount);
     if (amt.lte(0)) throw new BadRequestException('Withdrawal must be positive.');
+    if (amt.lt(MIN_WITHDRAWAL)) throw new BadRequestException(`Minimum withdrawal is $${MIN_WITHDRAWAL}.`);
 
     return this.prisma.$transaction(async (tx) => {
       const cash = await this.userCash(tx, userId);

@@ -11,7 +11,7 @@ const STEPS = [
   {
     icon: Gift,
     title: 'Claim $5 free',
-    body: 'Every new account gets a welcome pack of play money — no deposit needed.',
+    body: 'Every new account gets a welcome bonus credited instantly — no deposit needed.',
   },
   {
     icon: TrendingUp,
@@ -34,7 +34,7 @@ export default function HowPage() {
       </h1>
       <p className="mt-3 max-w-2xl text-fg/60">
         FORTX blends prediction markets with fast casino games. Pick a side on real events,
-        watch the odds move, and play provably-fair rounds — all with play money.
+        watch the odds move, and play provably-fair rounds.
       </p>
 
       <div className="mt-10 grid gap-4 sm:grid-cols-2">
@@ -79,7 +79,7 @@ export default function HowPage() {
       </div>
 
       <p className="mt-10 text-center text-xs text-fg/35">
-        18+. FORTX uses play money only — no real money. Please play responsibly.
+        18+. Please play responsibly.
       </p>
     </div>
   );

@@ -33,8 +33,6 @@ export class JackpotService {
       orderBy: { createdAt: 'desc' },
     });
     if (!round) {
-      // Показываем только что закрытый раунд ещё немного, чтобы фронт
-      // успел доиграть анимацию колеса и показать победителя.
       const lastClosed = await this.prisma.jackpotRound.findFirst({
         where: { status: 'CLOSED' },
         include: {

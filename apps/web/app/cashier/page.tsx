@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import { fmtMoney } from '@/lib/format';
 
-const PRESETS = [5, 10, 25, 50, 100, 250];
+const PRESETS = [10, 25, 50, 100, 250, 500];
 type PaymentRow = { id: string; amount: number; currency: string; status: string; createdAt: string; confirmedAt: string | null };
 
 export default function CashierPage() {
@@ -102,8 +102,9 @@ export default function CashierPage() {
               </button>
             ))}
           </div>
-          <input type="number" min={1} step={1} value={amount} onChange={e=>setAmount(Math.max(1,Number(e.target.value)))}
+          <input type="number" min={10} step={1} value={amount} onChange={e=>setAmount(Math.max(10,Number(e.target.value)))}
             className="mt-3 w-full rounded-xl border hairline bg-fg/[0.04] px-4 py-2.5 font-mono text-xl outline-none focus:border-gold/50"/>
+          <p className="mt-1.5 text-xs text-fg/35">Minimum deposit $10</p>
           {msg && <p className={`mt-3 text-sm font-medium ${msg.ok?'text-win':'text-lose'}`}>{msg.text}</p>}
           {redirectUrl ? (
             <div className="mt-4 space-y-3">
@@ -146,7 +147,7 @@ export default function CashierPage() {
       {tab==='withdraw' && (
         <div className="mt-5 rounded-2xl panel p-5">
           <h2 className="font-display font-semibold">Withdraw</h2>
-          <p className="mt-2 text-sm text-fg/50">Crypto withdrawals via support. Min $10.</p>
+          <p className="mt-2 text-sm text-fg/50">Crypto withdrawals via support. Min $50.</p>
           <button onClick={()=>window.dispatchEvent(new CustomEvent('predikt:support'))}
             className="mt-4 rounded-xl border border-gold/30 px-5 py-2.5 text-sm font-semibold text-gold-deep transition hover:bg-gold/10">
             Contact support

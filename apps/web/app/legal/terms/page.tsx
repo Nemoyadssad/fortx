@@ -27,12 +27,11 @@ export default function TermsPage() {
         </p>
       </Section>
 
-      <Section heading="3. Balance and play">
+     <Section heading="3. Balance and play">
         <p>
-          Balances are shown in in-app play money. Balances, bonuses, and any promotional offers
-          have no cash value except where expressly stated and are subject to the rules of
-          each game and promotion. Game outcomes are determined server-side using a
-          provably-fair method.
+          Your account balance reflects deposits, withdrawals, winnings, and any promotional
+          credit, subject to the rules of each game and promotion. Game outcomes are
+          determined server-side using a provably-fair method.
         </p>
       </Section>
 

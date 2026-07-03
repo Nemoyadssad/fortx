@@ -34,7 +34,7 @@ export class PaymentsService {
   /** Create a Platega payment link and save pending Payment row */
   async createDeposit(userId: string, amountUsd: number, method = 'USDT_TRC20', webOrigin: string) {
     if (!this.configured) throw new BadRequestException('Payment gateway not configured.');
-    if (amountUsd < 1 || amountUsd > 10000) throw new BadRequestException('Amount must be $1–$10 000.');
+    if (amountUsd < 10 || amountUsd > 10000) throw new BadRequestException('Amount must be $10–$10 000.');
 
     const methodId = parseInt(this.config.get('PLATEGA_CRYPTO_METHOD_ID') ?? String(DEFAULT_CRYPTO_METHOD_ID));
     const body = {
