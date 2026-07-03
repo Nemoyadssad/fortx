@@ -357,8 +357,16 @@ enum SupportSender {
 
 model SupportThread {
   id            String           @id @default(cuid())
-  userId        String           @unique
-  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Optional now — guests without an account can also have a thread.
+  userId        String?          @unique
+  user          User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Identifies a guest thread. Required, unique — this is how guestStart()
+  // finds/reuses a conversation for a given visitor.
+  email         String           @unique
+  name          String?
+  // Random session secret returned to the client after /support/start,
+  // sent back as the x-support-token header on every guest request.
+  token         String?          @unique
   status        SupportStatus    @default(OPEN)
   lastMessageAt DateTime         @default(now())
   userUnread    Int              @default(0) // messages from agents the user hasn't seen
