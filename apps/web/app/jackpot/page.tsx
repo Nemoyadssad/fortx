@@ -124,6 +124,7 @@ export default function JackpotPage() {
   const rotationRef = useRef(0);
   const anticipatingRoundId = useRef<string | null>(null);
   const revealTarget = useRef<number | null>(null);
+   const anticipatingStartedAt = useRef<number | null>(null);
   const hasEntries = (round?.segments?.length ?? 0) > 0;
 
   const load = useCallback(async () => {
@@ -157,6 +158,7 @@ export default function JackpotPage() {
       setCountdown(secs);
       if (secs === 0 && wheelPhase === 'idle') {
         anticipatingRoundId.current = round.id;
+        anticipatingStartedAt.current = Date.now();
         setWheelPhase('anticipating');
       }
     };
@@ -189,6 +191,28 @@ export default function JackpotPage() {
     }
   }, [round, wheelPhase]);
 
+  // Safety net: if we're stuck anticipating for too long (missed poll window,
+  // backgrounded tab, etc.), resolve from the history list instead of
+  // spinning forever.
+  useEffect(() => {
+    if (wheelPhase !== 'anticipating') return;
+    const t = setTimeout(() => {
+      const targetId = anticipatingRoundId.current;
+      if (!targetId) { setWheelPhase('idle'); return; }
+      const fromHistory = history.find(h => h.id === targetId);
+      if (fromHistory?.winnerId) {
+        revealTarget.current = computeTargetRotation(fromHistory.segments, fromHistory.winnerId, rotationRef.current);
+        setWheelPhase('revealing');
+      } else {
+        // Truly can't resolve it — bail out instead of spinning forever.
+        setWheelPhase('idle');
+        rotationRef.current = 0;
+        setRotation(0);
+      }
+    }, 10000); // give the normal path 10s before falling back
+    return () => clearTimeout(t);
+  }, [wheelPhase, history]);
+  
   // Decelerate smoothly onto the winner's sector.
   useEffect(() => {
     if (wheelPhase !== 'revealing' || revealTarget.current == null) return;

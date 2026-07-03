@@ -35,10 +35,7 @@ export function LegalShell({
       </h1>
       <p className="mt-2 text-sm text-fg/40">Last updated: {updated}</p>
 
-      <div className="mt-4 rounded-xl border border-gold/20 bg-gold/[0.05] px-4 py-3 text-xs text-fg/60">
-        This is a starter template. Have it reviewed by a qualified lawyer for your
-        jurisdiction before launch.
-      </div>
+      
 
       <article className="legal mt-8 space-y-6 text-sm leading-relaxed text-fg/70">
         {children}
