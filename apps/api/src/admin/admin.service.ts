@@ -184,6 +184,16 @@ export class AdminService {
       },
     });
 
+    // Доставляем новый пароль пользователю через уведомление в приложении,
+    // а не по почте. Одноразово — админ должен предупредить юзера сменить пароль.
+    await this.prisma.notification.create({
+      data: {
+        userId: id,
+        title: 'Пароль изменён администратором',
+        text: `Ваш новый пароль: ${plain}\nРекомендуем сменить его на свой после входа.`,
+      },
+    });
+
     // Returned once, not persisted anywhere in plaintext — the admin must
     // copy it now and pass it to the user themselves.
     return { id, temporaryPassword: plain };
