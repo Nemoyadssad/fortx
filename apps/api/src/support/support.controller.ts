@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Headers, Param, Post, Req } from '@nestjs/common';
 import { IsEmail, IsIn, IsString, MaxLength, MinLength } from 'class-validator';
+import { Public } from '../common/auth/public.decorator';
 import { Roles } from '../common/rbac/roles.decorator';
 import { SupportService } from './support.service';
 
@@ -40,28 +41,33 @@ export class SupportController {
   constructor(private readonly support: SupportService) {}
 
   // ---- guest (no login required) ----
+  @Public()
   @Get('faq')
   faq() {
     return this.support.faqItems();
   }
 
+  @Public()
   @Post('start')
   start(@Body() dto: StartDto) {
     return this.support.guestStart(dto.email, dto.name, dto.body);
   }
 
+  @Public()
   @Get('thread')
   poll(@Headers('x-support-token') token: string) {
     if (!token) throw new BadRequestException('Missing support token.');
     return this.support.guestPoll(token);
   }
 
+  @Public()
   @Get('thread/unread')
   unread(@Headers('x-support-token') token: string) {
     if (!token) throw new BadRequestException('Missing support token.');
     return this.support.guestUnread(token);
   }
 
+  @Public()
   @Post('thread/messages')
   send(@Headers('x-support-token') token: string, @Body() dto: SendDto) {
     if (!token) throw new BadRequestException('Missing support token.');
