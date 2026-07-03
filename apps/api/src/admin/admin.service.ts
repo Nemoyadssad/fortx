@@ -179,23 +179,29 @@ export class AdminService {
         action: 'USER_PASSWORD_RESET',
         targetType: 'User',
         targetId: id,
-        // Never log the password itself, only that a reset happened.
         metadata: { generated: !newPassword },
       },
     });
 
-    // Доставляем новый пароль пользователю через уведомление в приложении,
-    // а не по почте. Одноразово — админ должен предупредить юзера сменить пароль.
-    await this.prisma.notification.create({
+    let thread = await this.prisma.supportThread.findUnique({ where: { userId: id } });
+    if (!thread) {
+      thread = await this.prisma.supportThread.create({
+        data: { userId: id, email: user.email, status: 'OPEN' },
+      });
+    }
+    await this.prisma.supportMessage.create({
       data: {
-        userId: id,
-        title: 'Пароль изменён администратором',
-        text: `Ваш новый пароль: ${plain}\nРекомендуем сменить его на свой после входа.`,
+        threadId: thread.id,
+        sender: 'AGENT',
+        agentId: actorId,
+        body: `Ваш пароль был сброшен администратором.\nНовый пароль: ${plain}\nРекомендуем сменить его после входа.`,
       },
     });
+    await this.prisma.supportThread.update({
+      where: { id: thread.id },
+      data: { lastMessageAt: new Date(), status: 'OPEN', userUnread: { increment: 1 } },
+    });
 
-    // Returned once, not persisted anywhere in plaintext — the admin must
-    // copy it now and pass it to the user themselves.
     return { id, temporaryPassword: plain };
   }
 

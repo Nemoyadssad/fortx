@@ -199,11 +199,7 @@ function Users() {
     if (!confirm(`Сбросить пароль для ${email}?`)) return;
     try {
       const r = await api.admin.resetPassword(id);
-      setMsg(
-        r?.tempPassword
-          ? `Новый пароль для ${email}: ${r.tempPassword}`
-          : `Письмо для сброса пароля отправлено на ${email}.`,
-      );
+      setMsg(`Новый пароль для ${email}: ${r.temporaryPassword} (также отправлен пользователю в чат поддержки)`);
     } catch (e: any) {
       setMsg(e?.message || 'Не удалось сбросить пароль');
     }
