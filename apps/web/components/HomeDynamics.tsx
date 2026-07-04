@@ -37,12 +37,12 @@ export function HomeDynamics({ events }: { events: any[] }) {
 
   return (
     <section className="mx-auto max-w-7xl px-5 pt-6">
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[1.4fr_1fr]">
         {/* Event of the day */}
         {eotd && (
           <Link
             href={`/event/${eotd.id}`}
-            className="group relative overflow-hidden rounded-2xl panel p-5 transition hover:border-gold/30"
+            className="group relative min-w-0 overflow-hidden rounded-2xl panel p-5 transition hover:border-gold/30"
           >
             <div className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-gradient-to-br from-gold/20 to-transparent blur-2xl" />
             <div className="flex items-center gap-2">
@@ -50,7 +50,7 @@ export function HomeDynamics({ events }: { events: any[] }) {
                 <Flame className="h-3 w-3" /> Event of the day
               </span>
             </div>
-            <div className="mt-3 flex items-start gap-4">
+            <div className="mt-3 flex min-w-0 items-start gap-4">
               {eotd.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={eotd.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover ring-1 ring-fg/10" />
@@ -58,13 +58,13 @@ export function HomeDynamics({ events }: { events: any[] }) {
                 <div className="h-16 w-16 shrink-0 rounded-xl bg-fg/[0.05]" />
               )}
               <div className="min-w-0 flex-1">
-                <h3 className="font-display text-lg font-bold leading-snug group-hover:text-gold-deep">{eotd.title}</h3>
+                <h3 className="truncate font-display text-lg font-bold leading-snug group-hover:text-gold-deep">{eotd.title}</h3>
                 {pct != null && (
-                  <div className="mt-2 flex items-center gap-3">
+                  <div className="mt-2 flex min-w-0 items-center gap-3">
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-fg/[0.08]">
                       <div className="h-full rounded-full bg-gradient-to-r from-gold to-gold-soft" style={{ width: `${pct}%` }} />
                     </div>
-                    <span className="font-mono text-sm font-bold text-gold-deep">{pct}%</span>
+                    <span className="shrink-0 font-mono text-sm font-bold text-gold-deep">{pct}%</span>
                   </div>
                 )}
               </div>
@@ -76,7 +76,7 @@ export function HomeDynamics({ events }: { events: any[] }) {
         )}
 
         {/* Flash markets */}
-        <div className="rounded-2xl panel p-5">
+        <div className="min-w-0 overflow-hidden rounded-2xl panel p-5">
           <div className="flex items-center gap-2">
             <span className="flex items-center gap-1 rounded-full bg-lose/15 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-lose">
               <Zap className="h-3 w-3" /> Flash
@@ -90,7 +90,7 @@ export function HomeDynamics({ events }: { events: any[] }) {
               {flash.slice(0, 5).map((e) => {
                 const m = minsLeft(e.closesAt);
                 return (
-                  <Link key={e.id} href={`/event/${e.id}`} className="group flex items-center gap-2.5">
+                  <Link key={e.id} href={`/event/${e.id}`} className="group flex min-w-0 items-center gap-2.5">
                     <span
                       className={`flex w-14 shrink-0 items-center justify-center gap-1 rounded-md py-1 font-mono text-[10px] font-bold ${
                         m != null && m <= 30 ? 'bg-lose/15 text-lose' : 'bg-fg/[0.06] text-fg/55'

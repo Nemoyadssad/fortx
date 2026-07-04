@@ -103,7 +103,7 @@ export function FeaturedHero({
         <div
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
-          className="relative flex min-h-[330px] flex-col overflow-hidden rounded-3xl border border-gold/20 bg-gradient-to-br from-panel2 via-panel to-bg p-6 shadow-panel"
+          className="relative flex min-h-[330px] min-w-0 flex-col overflow-hidden rounded-3xl border border-gold/20 bg-gradient-to-br from-panel2 via-panel to-bg p-6 shadow-panel"
         >
           {/* ambient glows + slow rotating ring */}
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-gold/10 blur-3xl" />
@@ -124,8 +124,8 @@ export function FeaturedHero({
           </div>
 
           {/* title */}
-          <a href={`/event/${ev.id}`} className="group/h relative">
-            <h2 className="line-clamp-2 text-center font-display text-2xl font-bold leading-tight transition group-hover/h:text-gold-deep sm:text-3xl">
+          <a href={`/event/${ev.id}`} className="group/h relative min-w-0">
+            <h2 className="line-clamp-2 min-w-0 text-center font-display text-2xl font-bold leading-tight transition group-hover/h:text-gold-deep sm:text-3xl">
               {market.question || ev.title}
             </h2>
           </a>
@@ -134,19 +134,19 @@ export function FeaturedHero({
           </p>
 
           {/* quick picks */}
-          <div className="relative mt-auto flex flex-wrap items-center justify-center gap-2 pt-5">
+          <div className="relative mt-auto flex min-w-0 flex-wrap items-center justify-center gap-2 pt-5">
             {top.map((o, i) => (
               <button
                 key={o.id}
                 onClick={() => onPick(ev, market, o)}
-                className="group/b flex items-center gap-2 rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-4 py-2.5 transition hover:border-gold/40 hover:bg-fg/[0.05]"
+                className="group/b flex min-w-0 max-w-full items-center gap-2 rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-4 py-2.5 transition hover:border-gold/40 hover:bg-fg/[0.05]"
               >
-                <span className="h-2 w-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                <span className="max-w-[160px] truncate text-sm text-fg/85">{o.label}</span>
-                <span className="font-mono text-sm font-bold tabular-nums text-gold-deep">{pct(o.price)}%</span>
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                <span className="min-w-0 max-w-[160px] truncate text-sm text-fg/85">{o.label}</span>
+                <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-gold-deep">{pct(o.price)}%</span>
               </button>
             ))}
-            <a href={`/event/${ev.id}`} className="rounded-xl bg-gradient-to-b from-gold to-gold-soft px-4 py-2.5 text-sm font-bold text-black shadow-gold transition hover:brightness-105">
+            <a href={`/event/${ev.id}`} className="shrink-0 rounded-xl bg-gradient-to-b from-gold to-gold-soft px-4 py-2.5 text-sm font-bold text-black shadow-gold transition hover:brightness-105">
               View market →
             </a>
           </div>
@@ -170,8 +170,8 @@ export function FeaturedHero({
         </div>
 
         {/* promo sidebar */}
-        <div className="flex flex-col gap-4">
-          <div className="relative flex flex-col overflow-hidden rounded-3xl border border-fg/[0.06] bg-gradient-to-br from-[#efeaff] to-panel p-6">
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="relative flex min-w-0 flex-col overflow-hidden rounded-3xl border border-fg/[0.06] bg-gradient-to-br from-[#efeaff] to-panel p-6">
             <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-[#7c5cff]/25 blur-3xl" />
             <Gamepad2 className="h-7 w-7 text-[#b9a6ff]" />
             <h3 className="mt-3 font-display text-xl font-bold leading-tight">{t('home.casinoTitle')}</h3>
@@ -179,7 +179,7 @@ export function FeaturedHero({
             <a href="/games" className="mt-4 rounded-xl bg-gradient-to-b from-[#8a6cff] to-[#6f54e0] py-2.5 text-center font-bold text-white transition hover:brightness-110">{t('common.playNow')}</a>
           </div>
 
-          <div className="relative flex flex-col overflow-hidden rounded-3xl border border-gold/20 bg-gradient-to-br from-[#fbf3da] to-panel p-6">
+          <div className="relative flex min-w-0 flex-col overflow-hidden rounded-3xl border border-gold/20 bg-gradient-to-br from-[#fbf3da] to-panel p-6">
             <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-gold/20 blur-3xl" />
             <Gift className="h-7 w-7 text-gold-deep" />
             <h3 className="mt-3 font-display text-xl font-bold leading-tight"><span className="gold-text">{fmtMoney(welcome)} free</span> to start</h3>
