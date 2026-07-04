@@ -25,6 +25,8 @@
 html,
 body {
   background: rgb(var(--bg));
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 body {

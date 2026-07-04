@@ -107,34 +107,34 @@ export function MarketCard({
 
   return (
     <div
-      className="group relative flex flex-col rounded-2xl panel panel-hover p-4 animate-riseIn"
+      className="group relative flex min-w-0 max-w-full flex-col overflow-hidden rounded-2xl panel panel-hover p-4 animate-riseIn"
       style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
     >
       <span className="pointer-events-none absolute left-0 top-5 bottom-5 w-[3px] rounded-full bg-gradient-to-b from-gold to-gold-deep opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       {/* header */}
-      <a href={`/event/${event.id}`} className="group/h flex items-start gap-3">
+      <a href={`/event/${event.id}`} className="group/h flex min-w-0 items-start gap-3">
         <Avatar url={event.imageUrl} name={event.title} />
-        <h3 className="line-clamp-2 min-h-[2.5rem] flex-1 font-display text-[15px] font-semibold leading-snug text-fg/95 transition group-hover/h:text-gold-deep">
+        <h3 className="line-clamp-2 min-h-[2.5rem] min-w-0 flex-1 font-display text-[15px] font-semibold leading-snug text-fg/95 transition group-hover/h:text-gold-deep">
           {single ? single.question || event.title : event.title}
         </h3>
         {binary && <Ring value={pct(binary.yes.price)} tone="win" />}
       </a>
 
       {/* body */}
-      <div className="mt-4 flex-1">
+      <div className="mt-4 min-w-0 flex-1">
         {binary ? (
           <div className="grid grid-cols-2 gap-2">
             <button
               disabled={!tradable(binary.yes)}
               onClick={() => onPick(event, single!, binary.yes)}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-win/30 bg-gradient-to-b from-win/20 to-win/[0.06] py-2.5 text-sm font-bold text-win transition hover:border-win/60 hover:from-win/30 hover:to-win/10 disabled:opacity-40"
+              className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-win/30 bg-gradient-to-b from-win/20 to-win/[0.06] py-2.5 text-sm font-bold text-win transition hover:border-win/60 hover:from-win/30 hover:to-win/10 disabled:opacity-40"
             >
               Yes <span className="font-mono text-xs text-win/60">{pct(binary.yes.price)}%</span>
             </button>
             <button
               disabled={!tradable(binary.no)}
               onClick={() => onPick(event, single!, binary.no)}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-lose/30 bg-gradient-to-b from-lose/20 to-lose/[0.06] py-2.5 text-sm font-bold text-lose transition hover:border-lose/60 hover:from-lose/30 hover:to-lose/10 disabled:opacity-40"
+              className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-lose/30 bg-gradient-to-b from-lose/20 to-lose/[0.06] py-2.5 text-sm font-bold text-lose transition hover:border-lose/60 hover:from-lose/30 hover:to-lose/10 disabled:opacity-40"
             >
               No <span className="font-mono text-xs text-lose/60">{pct(binary.no.price)}%</span>
             </button>
@@ -147,10 +147,10 @@ export function MarketCard({
                 key={o.id}
                 disabled={!tradable(o)}
                 onClick={() => onPick(event, single, o)}
-                className="flex w-full items-center justify-between rounded-lg border border-fg/[0.05] bg-fg/[0.02] px-3 py-2 text-left transition hover:border-gold/40 hover:bg-fg/[0.04] disabled:opacity-40"
+                className="flex w-full min-w-0 items-center justify-between rounded-lg border border-fg/[0.05] bg-fg/[0.02] px-3 py-2 text-left transition hover:border-gold/40 hover:bg-fg/[0.04] disabled:opacity-40"
               >
-                <span className="truncate text-sm text-fg/80">{o.label}</span>
-                <span className="ml-2 font-mono text-sm font-bold tabular-nums text-gold-deep">
+                <span className="min-w-0 truncate text-sm text-fg/80">{o.label}</span>
+                <span className="ml-2 shrink-0 font-mono text-sm font-bold tabular-nums text-gold-deep">
                   {pct(o.price)}%
                 </span>
               </button>
@@ -168,24 +168,24 @@ export function MarketCard({
               const yn = yesNo(m.outcomes);
               const label = m.question.replace(/\?.*$/, '');
               return (
-                <div key={m.id} className="flex items-center gap-2">
-                  <span className="flex-1 truncate text-sm text-fg/80">{label}</span>
+                <div key={m.id} className="flex min-w-0 items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-sm text-fg/80">{label}</span>
                   {yn ? (
                     <>
-                      <span className="font-mono text-sm font-bold tabular-nums text-fg/90">
+                      <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-fg/90">
                         {pct(yn.yes.price)}%
                       </span>
                       <button
                         disabled={!tradable(yn.yes)}
                         onClick={() => onPick(event, m, yn.yes)}
-                        className="rounded-md border border-win/25 bg-win/[0.08] px-2.5 py-1 text-xs font-semibold text-win transition hover:bg-win/15 disabled:opacity-40"
+                        className="shrink-0 rounded-md border border-win/25 bg-win/[0.08] px-2.5 py-1 text-xs font-semibold text-win transition hover:bg-win/15 disabled:opacity-40"
                       >
                         Yes
                       </button>
                       <button
                         disabled={!tradable(yn.no)}
                         onClick={() => onPick(event, m, yn.no)}
-                        className="rounded-md border border-lose/25 bg-lose/[0.08] px-2.5 py-1 text-xs font-semibold text-lose transition hover:bg-lose/15 disabled:opacity-40"
+                        className="shrink-0 rounded-md border border-lose/25 bg-lose/[0.08] px-2.5 py-1 text-xs font-semibold text-lose transition hover:bg-lose/15 disabled:opacity-40"
                       >
                         No
                       </button>
@@ -194,7 +194,7 @@ export function MarketCard({
                     <button
                       disabled={!m.outcomes[0] || !tradable(m.outcomes[0])}
                       onClick={() => m.outcomes[0] && onPick(event, m, m.outcomes[0])}
-                      className="rounded-md border border-gold/25 bg-gold/[0.08] px-2.5 py-1 text-xs font-semibold text-gold-deep transition hover:bg-gold/15 disabled:opacity-40"
+                      className="shrink-0 rounded-md border border-gold/25 bg-gold/[0.08] px-2.5 py-1 text-xs font-semibold text-gold-deep transition hover:bg-gold/15 disabled:opacity-40"
                     >
                       {m.outcomes[0] ? `${pct(m.outcomes[0].price)}%` : '—'}
                     </button>
@@ -212,15 +212,15 @@ export function MarketCard({
       </div>
 
       {/* footer */}
-      <div className="mt-4 flex items-center gap-2 border-t hairline pt-3 text-[11px] text-fg/40">
+      <div className="mt-4 flex min-w-0 items-center gap-2 border-t hairline pt-3 text-[11px] text-fg/40">
         {event.category && (
-          <span className="inline-flex items-center gap-1 rounded bg-fg/[0.04] px-1.5 py-0.5 font-mono uppercase tracking-wider">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded bg-fg/[0.04] px-1.5 py-0.5 font-mono uppercase tracking-wider">
             <span className="h-1 w-1 rounded-full bg-gold" />
             {event.category}
           </span>
         )}
-        {footerDate && <span>· {footerDate}</span>}
-        <span className="ml-auto flex items-center gap-1.5 text-win">
+        {footerDate && <span className="shrink-0">· {footerDate}</span>}
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-win">
           <span className="h-1.5 w-1.5 rounded-full bg-win animate-pulseDot" />
           live
         </span>
