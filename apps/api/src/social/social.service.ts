@@ -4,12 +4,13 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-function maskEmail(e: string): string {
+function maskEmail(e: string | null): string {
+  if (!e) return 'trader***';
   const m = e.match(/^(.{1,2}).*(@.*)$/);
   return m ? `${m[1]}***${m[2]}` : 'trader***';
 }
 
-function pubName(u: { displayName?: string | null; email: string } | undefined): string {
+function pubName(u: { displayName?: string | null; email: string | null } | undefined): string {
   if (!u) return 'Trader';
   if (u.displayName && u.displayName.trim()) return u.displayName.trim();
   return maskEmail(u.email);

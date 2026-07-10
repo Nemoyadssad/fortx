@@ -20,7 +20,8 @@ const TIERS = [
   { from: 50, rate: 0.5, name: 'Legend' },
 ];
 
-function maskEmail(e: string): string {
+function maskEmail(e: string | null | undefined): string {
+  if (!e) return 'user***';
   const m = e.match(/^(.{1,2}).*(@.*)$/);
   return m ? `${m[1]}***${m[2]}` : 'user***';
 }

@@ -266,7 +266,7 @@ export class ClimberService {
       include: { user: { select: { email: true, displayName: true } } },
     });
     return rounds.map((r) => {
-      const name = r.user.displayName || r.user.email.split('@')[0];
+      const name = r.user.displayName || r.user.email?.split('@')[0] || 'Player';
       const masked = name.length > 4 ? `${name.slice(0, 4)}***` : name;
       return {
         id: r.id,

@@ -5,8 +5,8 @@ import { SettingsService } from '../settings/settings.service';
 
 const DAY = 86400000;
 const dateKey = (d: Date) => d.toISOString().slice(0, 10);
-const maskName = (email: string) => {
-  const n = (email.split('@')[0] || 'player').replace(/[^a-zA-Z0-9._-]/g, '');
+const maskName = (email: string | null | undefined) => {
+  const n = (email?.split('@')[0] || 'player').replace(/[^a-zA-Z0-9._-]/g, '');
   return (n.slice(0, 2) || 'pl') + '***';
 };
 

@@ -183,10 +183,10 @@ export class AdminService {
       },
     });
 
-    let thread = await this.prisma.supportThread.findUnique({ where: { userId: id } });
+   let thread = await this.prisma.supportThread.findUnique({ where: { userId: id } });
     if (!thread) {
       thread = await this.prisma.supportThread.create({
-        data: { userId: id, email: user.email, status: 'OPEN' },
+        data: { userId: id, email: user.email ?? `${user.id}@telegram.fortx.local`, status: 'OPEN' },
       });
     }
     await this.prisma.supportMessage.create({
