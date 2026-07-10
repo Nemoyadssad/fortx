@@ -124,10 +124,11 @@ export const api = {
     claim: () => req('/referrals/claim', { method: 'POST' }),
   },
 
-  payments: {
+ payments: {
     methods: () => req('/payments/methods'),
     deposit: (amount: number, method: string) => req('/payments/deposit', { method: 'POST', body: JSON.stringify({ amount, method }) }),
     history: () => req('/payments/history'),
+    withdraw: (amount: number, address: string, network: string) => req('/payments/withdraw', { method: 'POST', body: JSON.stringify({ amount, address, network }) }),
   },
   jackpot: {
     current: () => req('/jackpot/current'),
