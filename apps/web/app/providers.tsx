@@ -79,7 +79,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
     if (tg?.initData && !getToken()) {
       tg.ready();
       tg.expand();
-      api.loginTelegram(tg.initData).then((r) => afterAuth(r.accessToken)).catch(() => {});
+      api.loginTelegram(tg.initData).then(async (r) => {
+        await afterAuth(r.accessToken);
+        const params = new URLSearchParams(window.location.search);
+        const ref = params.get('ref');
+        if (ref) {
+          api.redeemPromo(ref).catch(() => {
+            /* referral code invalid or already used — ignore silently */
+          });
+        }
+      }).catch(() => {});
     }
   }, [afterAuth]);
 
