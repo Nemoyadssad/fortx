@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Post, Request } from '@nestjs/common';
+import { Body, Controller, Get, Post, Request } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { Public } from '../common/auth/public.decorator';
 
@@ -6,23 +6,25 @@ import { Public } from '../common/auth/public.decorator';
 export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
-  /** Available crypto methods (local labels) */
+  /** Available crypto methods */
   @Get('methods')
-  methods() { return this.payments.methods; }
+  methods() {
+    return this.payments.methods;
+  }
 
-  /** Fetch real method IDs from Platega — use to find your crypto method ID */
-  @Get('platega-methods')
-  plategaMethods() { return this.payments.getPlategaMethods(); }
-
-  /** Create deposit — returns Platega redirect URL */
+  /** Create deposit — returns 2328 redirect URL */
   @Post('deposit')
   deposit(
     @Request() req: any,
     @Body() body: { amount: number; method?: string },
-    @Headers('origin') origin: string,
   ) {
-    const webOrigin = origin || process.env.WEB_ORIGIN || 'http://localhost:3000';
-    return this.payments.createDeposit(req.user.id, Number(body.amount), body.method, webOrigin);
+    const webOrigin = process.env.WEB_ORIGIN || 'http://localhost:3000';
+    return this.payments.createDeposit(
+      req.user.id,
+      Number(body.amount),
+      body.method,
+      webOrigin,
+    );
   }
 
   /** User payment history */
@@ -31,14 +33,13 @@ export class PaymentsController {
     return this.payments.history(req.user.id);
   }
 
-  /** Platega webhook — must be @Public, verified by headers */
+  /**
+   * 2328 payment webhook — @Public, signature verified inside service via HMAC
+   * 2328 sends POST with JSON body containing a "sign" field
+   */
   @Public()
   @Post('webhook')
-  webhook(
-    @Headers('x-merchantid') merchantId: string,
-    @Headers('x-secret') secret: string,
-    @Body() body: any,
-  ) {
-    return this.payments.handleWebhook(merchantId, secret, body);
+  webhook(@Body() body: any) {
+    return this.payments.handleWebhook(body);
   }
 }

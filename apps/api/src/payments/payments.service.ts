@@ -2,13 +2,21 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountType, TxnKind } from '@prisma/client';
+import { createHmac, timingSafeEqual } from 'crypto';
 
-const BASE = 'https://app.platega.io';
+const BASE = 'https://api.2328.io/api';
+const PROJECT_UUID = '99f31a9b-0c86-4d4a-8447-33139f688e6b';
 
-// Platega crypto method ID — find yours via GET /payments/platega-methods after setting keys
-// Set PLATEGA_CRYPTO_METHOD_ID in .env (check your Platega dashboard → Payment Methods)
-// Default 3 is a common crypto method ID, but yours may differ
-const DEFAULT_CRYPTO_METHOD_ID = 3;
+function apiSign(body: string, apiKey: string): string {
+  const base64 = Buffer.from(body, 'utf8').toString('base64');
+  return createHmac('sha256', apiKey).update(base64).digest('hex');
+}
+
+function apiSignGet(apiKey: string): string {
+  return createHmac('sha256', apiKey)
+    .update(Buffer.from('').toString('base64'))
+    .digest('hex');
+}
 
 @Injectable()
 export class PaymentsService {
@@ -19,93 +27,128 @@ export class PaymentsService {
     private readonly config: ConfigService,
   ) {}
 
-  private get merchantId(): string { return this.config.get('PLATEGA_MERCHANT_ID') ?? ''; }
-  private get secret(): string      { return this.config.get('PLATEGA_SECRET') ?? ''; }
-  private get configured(): boolean { return !!(this.merchantId && this.secret); }
+  private get paymentApiKey(): string {
+    return this.config.get('PAY2328_API_KEY') ?? '';
+  }
 
-  private headers() {
+  private get payoutApiKey(): string {
+    return this.config.get('PAY2328_PAYOUT_API_KEY') ?? '';
+  }
+
+  private get configured(): boolean {
+    return !!(this.paymentApiKey && this.payoutApiKey);
+  }
+
+  private headers(body: string, usePayoutKey = false): Record<string, string> {
+    const key = usePayoutKey ? this.payoutApiKey : this.paymentApiKey;
     return {
       'Content-Type': 'application/json',
-      'X-MerchantId': this.merchantId,
-      'X-Secret': this.secret,
+      'User-Agent': 'FortX/1.0 (+https://www.fortx.world)',
+      project: PROJECT_UUID,
+      sign: apiSign(body, key),
     };
   }
 
-  /** Create a Platega payment link and save pending Payment row */
-  async createDeposit(userId: string, amountUsd: number, method = 'USDT_TRC20', webOrigin: string) {
+  private headersGet(usePayoutKey = false): Record<string, string> {
+    const key = usePayoutKey ? this.payoutApiKey : this.paymentApiKey;
+    return {
+      'Content-Type': 'application/json',
+      'User-Agent': 'FortX/1.0 (+https://www.fortx.world)',
+      project: PROJECT_UUID,
+      sign: apiSignGet(key),
+    };
+  }
+
+  /** Create a 2328 payment session and save pending Payment row */
+  async createDeposit(userId: string, amountUsd: number, _method = 'CRYPTO', webOrigin: string) {
     if (!this.configured) throw new BadRequestException('Payment gateway not configured.');
     if (amountUsd < 10 || amountUsd > 10000) throw new BadRequestException('Amount must be $10–$10 000.');
 
-    const methodId = parseInt(this.config.get('PLATEGA_CRYPTO_METHOD_ID') ?? String(DEFAULT_CRYPTO_METHOD_ID));
-    const body = {
-      amount: amountUsd,
+    const orderId = `fortx-${userId}-${Date.now()}`;
+    const payload = {
+      amount: amountUsd.toFixed(2),
       currency: 'USD',
-      payment_method: methodId,
-      description: `FORTX deposit $${amountUsd}`,
-      return_url: `${webOrigin}/cashier?status=success`,
-      failed_url: `${webOrigin}/cashier?status=failed`,
-      // Platega will POST to our webhook with this order_id so we can match
-      order_id: `fortx-${userId}-${Date.now()}`,
+      order_id: orderId,
+      url_success: `${webOrigin}/cashier?status=success`,
+      url_callback: 'https://api.fortx.world/payments/webhook',
+      description: `FortX deposit $${amountUsd}`,
     };
 
-    const res = await fetch(`${BASE}/api/payments/create`, {
+    const body = JSON.stringify(payload);
+    const res = await fetch(`${BASE}/v1/payment`, {
       method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify(body),
+      headers: this.headers(body),
+      body,
     });
 
     const data: any = await res.json().catch(() => ({}));
-    if (!res.ok || !data?.id) {
-      this.logger.error('Platega create error', data);
+    if (!res.ok || data?.state !== 0 || !data?.result?.uuid) {
+      this.logger.error('2328 create error', data);
       throw new BadRequestException(data?.message ?? 'Payment gateway error.');
     }
 
-    // Save pending payment
+    const result = data.result;
+
     await this.prisma.payment.create({
       data: {
         userId,
-        plategaId: data.id,
+        plategaId: result.uuid,       // reuse existing field for 2328 UUID
         amount: amountUsd,
-        currency: method,
+        currency: 'CRYPTO',
         status: 'PENDING',
-        redirectUrl: data.redirect ?? null,
+        redirectUrl: result.url ?? null,
       },
     });
 
-    return { redirectUrl: data.redirect, id: data.id };
+    return { redirectUrl: result.url, id: result.uuid };
   }
 
-  /** Platega webhook — verify headers + credit balance on CONFIRMED */
-  async handleWebhook(merchantId: string, secret: string, payload: any) {
-    // Verify authenticity
-    if (merchantId !== this.merchantId || secret !== this.secret) {
-      this.logger.warn('Webhook auth mismatch');
+  /** 2328 payment webhook — verify HMAC + credit balance on paid/overpaid */
+  async handleWebhook(payload: any) {
+    // 1. Extract and verify signature
+    const receivedSign = payload.sign ?? '';
+    const { sign: _sign, ...rest } = payload;
+    const bodyToVerify = JSON.stringify(rest);
+    const base64 = Buffer.from(bodyToVerify, 'utf8').toString('base64');
+    const calculated = createHmac('sha256', this.paymentApiKey)
+      .update(base64)
+      .digest('hex');
+
+    const sigValid = timingSafeEqual(
+      Buffer.from(calculated),
+      Buffer.from(receivedSign || ''),
+    );
+    if (!sigValid) {
+      this.logger.warn('2328 webhook signature mismatch');
       return { ok: false };
     }
 
-    const { id: plategaId, status, amount } = payload;
-    if (!plategaId || !status) return { ok: false };
+    const { uuid: plategaId, payment_status, merchant_amount, order_id } = payload;
+    if (!plategaId || !payment_status) return { ok: false };
 
     const payment = await this.prisma.payment.findUnique({ where: { plategaId } });
-    if (!payment || payment.status !== 'PENDING') return { ok: true }; // already processed
+    if (!payment || payment.status !== 'PENDING') return { ok: true }; // idempotency
 
-    if (status === 'CONFIRMED') {
+    if (payment_status === 'paid' || payment_status === 'overpaid') {
+      const creditAmount = merchant_amount ? Number(merchant_amount) : Number(payment.amount);
+
       await this.prisma.$transaction(async (tx) => {
-        // Credit user balance
         const userCash = await tx.ledgerAccount.findFirstOrThrow({
           where: { ownerId: payment.userId, type: AccountType.USER_CASH },
         });
-        const deposits = await tx.ledgerAccount.findFirstOrThrow({
+        const house = await tx.ledgerAccount.findFirstOrThrow({
           where: { type: AccountType.SYSTEM_HOUSE },
         });
         await tx.ledgerTransaction.create({
           data: {
             kind: TxnKind.DEPOSIT,
-            reference: `platega:${plategaId}`,
-            entries: { create: [
-              { accountId: deposits.id, amount: -(Number(amount)) },
-              { accountId: userCash.id, amount: Number(amount) },
-            ]},
+            reference: `2328:${plategaId}`,
+            entries: {
+              create: [
+                { accountId: house.id, amount: -creditAmount },
+                { accountId: userCash.id, amount: creditAmount },
+              ],
+            },
           },
         });
         await tx.payment.update({
@@ -113,15 +156,52 @@ export class PaymentsService {
           data: { status: 'CONFIRMED', confirmedAt: new Date() },
         });
       });
-      this.logger.log(`Payment confirmed: ${plategaId} $${amount} → user ${payment.userId}`);
-    } else if (status === 'CANCELED' || status === 'CHARGEBACKED') {
+
+      this.logger.log(`Payment confirmed: ${plategaId} $${creditAmount} → user ${payment.userId}`);
+    } else if (payment_status === 'cancel' || payment_status === 'aml_lock') {
       await this.prisma.payment.update({
         where: { plategaId },
-        data: { status: status as any },
+        data: { status: 'CANCELED' },
       });
     }
 
     return { ok: true };
+  }
+
+  /** Create a payout (withdrawal) via 2328 */
+  async createPayout(
+    userId: string,
+    amountUsd: number,
+    toAddress: string,
+    currency = 'USDT',
+    network = 'TRX-TRC20',
+  ) {
+    if (!this.configured) throw new BadRequestException('Payment gateway not configured.');
+
+    const orderId = `fortx-payout-${userId}-${Date.now()}`;
+    const payload = {
+      currency,
+      network,
+      amount: amountUsd.toFixed(2),
+      to_address: toAddress,
+      order_id: orderId,
+      fee_option: 'deduct',
+    };
+
+    const body = JSON.stringify(payload);
+    const res = await fetch(`${BASE}/v1/payout`, {
+      method: 'POST',
+      headers: this.headers(body, true), // use payout key
+      body,
+    });
+
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok || data?.state !== 0) {
+      this.logger.error('2328 payout error', data);
+      throw new BadRequestException(data?.message ?? 'Payout gateway error.');
+    }
+
+    return data.result;
   }
 
   /** User's payment history */
@@ -141,26 +221,7 @@ export class PaymentsService {
     }));
   }
 
-  /** Fetch real payment method IDs from Platega dashboard */
-  async getPlategaMethods() {
-    if (!this.configured) return { configured: false, methods: [] };
-    try {
-      const res = await fetch(`${BASE}/api/payment-methods`, {
-        headers: this.headers(),
-      });
-      const data: any = await res.json().catch(() => ({}));
-      // Returns array of { id, name, active, commission }
-      const methods = (data?.data ?? data ?? [])
-        .filter((m: any) => m?.active !== false)
-        .map((m: any) => ({ id: m.id, name: m.name, active: m.active, commission: m.commission }));
-      return { configured: true, methods };
-    } catch (e) {
-      this.logger.warn('Could not fetch Platega methods: ' + (e as Error).message);
-      return { configured: true, methods: [] };
-    }
-  }
-
   get methods() {
-    return [{ id: 'CRYPTO', label: 'Cryptocurrency (USDT / BTC / ETH)' }];
+    return [{ id: 'CRYPTO', label: 'Cryptocurrency (USDT / BTC / ETH / TON · via 2328)' }];
   }
 }
