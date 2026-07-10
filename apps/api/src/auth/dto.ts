@@ -34,3 +34,8 @@ export class LoginDto {
   @IsString()
   password!: string;
 }
+
+export class TelegramLoginDto {
+  @IsString()
+  initData!: string;
+}
