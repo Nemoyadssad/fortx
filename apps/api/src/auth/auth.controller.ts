@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto, RegisterDto } from './dto';
+import { LoginDto, RegisterDto, TelegramLoginDto } from './dto';
 import { Public } from '../common/auth/public.decorator';
 
 @Controller('auth')
@@ -22,6 +22,12 @@ export class AuthController {
     return this.auth.login(dto.email, dto.password);
   }
 
+  @Public()
+  @Post('telegram')
+  telegramLogin(@Body() dto: TelegramLoginDto) {
+    return this.auth.loginWithTelegram(dto.initData);
+  }
+  
   // Protected by the global JwtAuthGuard — echoes the authenticated user.
   @Get('me')
   me(@Req() req: any) {

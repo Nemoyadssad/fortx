@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
 import { Space_Grotesk, Sora, Space_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
@@ -39,6 +40,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: "(function(){try{if(localStorage.getItem('predikt_theme')==='light'){document.documentElement.classList.add('light');}}catch(e){}})();",
           }}
         />
+        <Script
+  src="https://telegram.org/js/telegram-web-app.js"
+  strategy="beforeInteractive"
+/>
       </head>
       <body>
         <Providers>

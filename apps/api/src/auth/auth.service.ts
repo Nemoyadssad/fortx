@@ -8,6 +8,8 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { SettingsService } from '../settings/settings.service';
+import { ConfigService } from '@nestjs/config';
+import { verifyTelegramInitData } from '../common/auth/telegram.util';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +18,7 @@ export class AuthService {
     private readonly wallet: WalletService,
     private readonly jwt: JwtService,
     private readonly settings: SettingsService,
+    private readonly config: ConfigService,
   ) {}
 
   private async issueToken(user: { id: string; role: string }) {
@@ -125,6 +128,33 @@ export class AuthService {
         await this.wallet.ensureUserAccounts(user.id);
       }
     }
+    return this.issueToken(user);
+  }
+  async loginWithTelegram(initData: string) {
+    const botToken = this.config.getOrThrow<string>('TELEGRAM_BOT_TOKEN');
+
+    let tgUser;
+    try {
+      tgUser = verifyTelegramInitData(initData, botToken);
+    } catch {
+      throw new UnauthorizedException('Invalid Telegram authentication data.');
+    }
+
+    const telegramId = String(tgUser.id);
+    let user = await this.prisma.user.findUnique({ where: { telegramId } });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          telegramId,
+          telegramUsername: tgUser.username,
+          displayName: tgUser.first_name ?? tgUser.username ?? `user_${telegramId}`,
+        },
+      });
+      await this.wallet.ensureUserAccounts(user.id);
+      await this.wallet.grantWelcomeBonus(user.id, this.settings.welcomeBonus());
+    }
+
     return this.issueToken(user);
   }
 }

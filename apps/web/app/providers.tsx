@@ -74,6 +74,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
     [loadSession],
   );
 
+  useEffect(() => {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.initData && !getToken()) {
+      tg.ready();
+      tg.expand();
+      api.loginTelegram(tg.initData).then((r) => afterAuth(r.accessToken)).catch(() => {});
+    }
+  }, [afterAuth]);
+
   const login = useCallback(
     async (e: string, p: string) => {
       const r = await api.login(e, p);

@@ -45,6 +45,8 @@ export const api = {
     }),
   login: (email: string, password: string) =>
     req('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  loginTelegram: (initData: string) =>
+    req('/auth/telegram', { method: 'POST', body: JSON.stringify({ initData }) }),
   me: () => req('/auth/me'),
   wallet: () => req('/wallet/me'),
   walletStats: () => req('/wallet/stats'),
