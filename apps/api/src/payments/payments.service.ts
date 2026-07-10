@@ -70,7 +70,7 @@ export class PaymentsService {
       currency: 'USD',
       order_id: orderId,
       url_success: `${webOrigin}/cashier?status=success`,
-      url_callback: 'https://api.fortx.world/payments/webhook',
+      url_callback: `${webOrigin.replace('3000', '4000')}/payments/webhook`,
       description: `FortX deposit $${amountUsd}`,
     };
 

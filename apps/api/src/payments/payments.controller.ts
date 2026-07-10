@@ -27,6 +27,21 @@ export class PaymentsController {
     );
   }
 
+  /** Withdraw — sends payout via 2328 */
+  @Post('withdraw')
+  withdraw(
+    @Request() req: any,
+    @Body() body: { amount: number; address: string; network?: string },
+  ) {
+    return this.payments.createPayout(
+      req.user.id,
+      Number(body.amount),
+      body.address,
+      'USDT',
+      body.network ?? 'TRX-TRC20',
+    );
+  }
+
   /** User payment history */
   @Get('history')
   history(@Request() req: any) {
@@ -35,7 +50,6 @@ export class PaymentsController {
 
   /**
    * 2328 payment webhook — @Public, signature verified inside service via HMAC
-   * 2328 sends POST with JSON body containing a "sign" field
    */
   @Public()
   @Post('webhook')

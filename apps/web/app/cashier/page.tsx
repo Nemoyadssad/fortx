@@ -1,25 +1,46 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowUpFromLine, Bitcoin, Clock, CheckCircle2, XCircle, Tag, Zap } from 'lucide-react';
+import { ArrowUpFromLine, Bitcoin, Clock, CheckCircle2, XCircle, Tag, Zap, SendHorizonal } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import { fmtMoney } from '@/lib/format';
 
 const PRESETS = [10, 25, 50, 100, 250, 500];
+const WITHDRAW_PRESETS = [50, 100, 250, 500];
+const NETWORKS = [
+  { id: 'TRX-TRC20', label: 'USDT TRC20' },
+  { id: 'ETH-ERC20', label: 'USDT ERC20' },
+  { id: 'BSC-BEP20', label: 'USDT BEP20' },
+];
+
 type PaymentRow = { id: string; amount: number; currency: string; status: string; createdAt: string; confirmedAt: string | null };
 
 export default function CashierPage() {
   const { email, refreshBalance, balances } = useAuth();
   const [tab, setTab] = useState<'crypto'|'dev'|'withdraw'|'history'>('crypto');
+
+  // deposit
   const [amount, setAmount] = useState(25);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ok:boolean;text:string}|null>(null);
   const [redirectUrl, setRedirectUrl] = useState<string|null>(null);
+
+  // withdraw
+  const [wAmount, setWAmount] = useState(50);
+  const [wAddress, setWAddress] = useState('');
+  const [wNetwork, setWNetwork] = useState('TRX-TRC20');
+  const [wBusy, setWBusy] = useState(false);
+  const [wMsg, setWMsg] = useState<{ok:boolean;text:string}|null>(null);
+
+  // history
   const [history, setHistory] = useState<PaymentRow[]>([]);
+
+  // promo
   const [code, setCode] = useState('');
   const [redeeming, setRedeeming] = useState(false);
   const [promoMsg, setPromoMsg] = useState<{ok:boolean;text:string}|null>(null);
+
   const isDev = process.env.NODE_ENV === 'development';
 
   useEffect(() => {
@@ -34,6 +55,20 @@ export default function CashierPage() {
       if (r?.redirectUrl) { setRedirectUrl(r.redirectUrl); setMsg({ok:true, text:'Payment created! Click below to pay.'}); }
     } catch (e:any) { setMsg({ok:false, text:e?.message ?? 'Error. Check API keys in .env'}); }
     finally { setBusy(false); }
+  }
+
+  async function withdraw() {
+    if (!email) { window.dispatchEvent(new CustomEvent('predikt:auth')); return; }
+    if (!wAddress.trim()) { setWMsg({ok:false, text:'Enter your wallet address.'}); return; }
+    if (wAmount < 50) { setWMsg({ok:false, text:'Minimum withdrawal is $50.'}); return; }
+    setWBusy(true); setWMsg(null);
+    try {
+      await (api as any).payments.withdraw(wAmount, wAddress.trim(), wNetwork);
+      await refreshBalance();
+      setWMsg({ok:true, text:`Withdrawal of ${fmtMoney(wAmount)} submitted! Usually processed within 10 minutes.`});
+      setWAddress('');
+    } catch (e:any) { setWMsg({ok:false, text:e?.message ?? 'Withdrawal error.'}); }
+    finally { setWBusy(false); }
   }
 
   async function devTopup() {
@@ -68,13 +103,14 @@ export default function CashierPage() {
           {id:'withdraw', label:'Withdraw', icon:ArrowUpFromLine},
           {id:'history', label:'History', icon:Clock},
         ] as {id:string;label:string;icon:any}[]).map(({id,label,icon:Icon}) => (
-          <button key={id} onClick={() => { setTab(id as any); setMsg(null); setRedirectUrl(null); }}
+          <button key={id} onClick={() => { setTab(id as any); setMsg(null); setRedirectUrl(null); setWMsg(null); }}
             className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${tab===id?'border-gold/50 bg-gold/15 text-gold-deep':'border-fg/[0.08] text-fg/55 hover:text-fg'}`}>
             <Icon className="h-4 w-4"/> {label}
           </button>
         ))}
       </div>
 
+      {/* ── DEPOSIT ── */}
       {tab==='crypto' && (
         <div className="mt-5 rounded-2xl panel p-6">
           <div className="flex items-center gap-3">
@@ -83,11 +119,11 @@ export default function CashierPage() {
             </span>
             <div>
               <h2 className="font-display font-bold">Crypto deposit</h2>
-              <p className="text-xs text-fg/45">USDT · BTC · ETH · and more via Platega</p>
+              <p className="text-xs text-fg/45">USDT · BTC · ETH · and more via 2328</p>
             </div>
           </div>
           <div className="mt-4 space-y-2">
-            {[{n:1,t:"Choose amount"},{n:2,t:"Click Deposit → redirect to Platega"},{n:3,t:"Pay in crypto of your choice"},{n:4,t:"Balance credited automatically"}].map(s=>(
+            {[{n:1,t:"Choose amount"},{n:2,t:"Click Deposit → redirect to 2328"},{n:3,t:"Pay in crypto of your choice"},{n:4,t:"Balance credited automatically"}].map(s=>(
               <div key={s.n} className="flex items-center gap-3 text-sm text-fg/60">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold/20 font-mono text-xs font-bold text-gold-deep">{s.n}</span>
                 {s.t}
@@ -121,10 +157,11 @@ export default function CashierPage() {
               {busy ? 'Creating…' : `Deposit ${fmtMoney(amount)} with crypto`}
             </button>
           )}
-          <p className="mt-4 text-center text-[11px] text-fg/30">Powered by Platega · 5% · Instant on confirmation</p>
+          <p className="mt-4 text-center text-[11px] text-fg/30">Powered by 2328 · Instant on confirmation</p>
         </div>
       )}
 
+      {/* ── DEV ── */}
       {tab==='dev' && isDev && (
         <div className="mt-5 rounded-2xl panel p-5">
           <h2 className="font-display font-semibold text-gold-deep">Dev top-up</h2>
@@ -144,17 +181,65 @@ export default function CashierPage() {
         </div>
       )}
 
+      {/* ── WITHDRAW ── */}
       {tab==='withdraw' && (
-        <div className="mt-5 rounded-2xl panel p-5">
-          <h2 className="font-display font-semibold">Withdraw</h2>
-          <p className="mt-2 text-sm text-fg/50">Crypto withdrawals via support. Min $50.</p>
-          <button onClick={()=>window.dispatchEvent(new CustomEvent('predikt:support'))}
-            className="mt-4 rounded-xl border border-gold/30 px-5 py-2.5 text-sm font-semibold text-gold-deep transition hover:bg-gold/10">
-            Contact support
+        <div className="mt-5 rounded-2xl panel p-6">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/10">
+              <SendHorizonal className="h-5 w-5 text-gold-deep"/>
+            </span>
+            <div>
+              <h2 className="font-display font-bold">Withdraw</h2>
+              <p className="text-xs text-fg/45">Crypto payout · Min $50 · via 2328</p>
+            </div>
+          </div>
+
+          {/* network selector */}
+          <p className="mt-4 text-xs font-semibold text-fg/50 uppercase tracking-wide">Network</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {NETWORKS.map(n=>(
+              <button key={n.id} onClick={()=>setWNetwork(n.id)}
+                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${wNetwork===n.id?'border-gold/60 bg-gold/20 text-gold-deep':'border-fg/[0.08] text-fg/50 hover:border-gold/30'}`}>
+                {n.label}
+              </button>
+            ))}
+          </div>
+
+          {/* amount presets */}
+          <p className="mt-4 text-xs font-semibold text-fg/50 uppercase tracking-wide">Amount</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {WITHDRAW_PRESETS.map(v=>(
+              <button key={v} onClick={()=>setWAmount(v)}
+                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${wAmount===v?'border-gold/60 bg-gold/20 text-gold-deep':'border-fg/[0.08] text-fg/50 hover:border-gold/30'}`}>
+                ${v}
+              </button>
+            ))}
+          </div>
+          <input type="number" min={50} step={1} value={wAmount} onChange={e=>setWAmount(Math.max(50,Number(e.target.value)))}
+            className="mt-3 w-full rounded-xl border hairline bg-fg/[0.04] px-4 py-2.5 font-mono text-xl outline-none focus:border-gold/50"/>
+          <p className="mt-1.5 text-xs text-fg/35">Minimum withdrawal $50</p>
+
+          {/* wallet address */}
+          <p className="mt-4 text-xs font-semibold text-fg/50 uppercase tracking-wide">Wallet address</p>
+          <input
+            type="text"
+            value={wAddress}
+            onChange={e=>setWAddress(e.target.value)}
+            placeholder="Your USDT wallet address…"
+            className="mt-2 w-full rounded-xl border hairline bg-fg/[0.04] px-4 py-2.5 text-sm outline-none focus:border-gold/50 font-mono"
+          />
+
+          {wMsg && <p className={`mt-3 text-sm font-medium ${wMsg.ok?'text-win':'text-lose'}`}>{wMsg.text}</p>}
+
+          <button onClick={withdraw} disabled={wBusy || !wAddress.trim()}
+            className="mt-4 w-full rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3.5 font-bold text-black shadow-gold transition hover:brightness-105 disabled:opacity-50">
+            {wBusy ? 'Processing…' : `Withdraw ${fmtMoney(wAmount)}`}
           </button>
+          <p className="mt-3 text-center text-[11px] text-fg/30">Powered by 2328 · Usually within 10 minutes</p>
         </div>
       )}
 
+      {/* ── HISTORY ── */}
       {tab==='history' && (
         <div className="mt-5 rounded-2xl panel p-5">
           <h2 className="mb-4 font-display font-semibold">Payment history</h2>
@@ -178,6 +263,7 @@ export default function CashierPage() {
         </div>
       )}
 
+      {/* ── PROMO ── */}
       <div className="mt-5 rounded-2xl panel p-5">
         <div className="flex items-center gap-2"><Tag className="h-4 w-4 text-gold-deep"/><h2 className="font-display font-semibold">Promo code</h2></div>
         <div className="mt-3 flex gap-2">
