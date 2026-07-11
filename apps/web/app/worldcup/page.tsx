@@ -290,18 +290,22 @@ function MarketColumn({
     <div className="flex flex-col gap-1.5 w-full">
       <span className="text-[10px] text-fg/35 uppercase tracking-widest font-mono truncate">{label}</span>
       <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${outcomes.length}, 1fr)` }}>
-        {outcomes.map((o, i) => (
-          <OddsPill
-            key={o.id}
-            outcome={o}
-            market={market}
-            event={event}
-            onPick={onPick}
-            color={colorForIndex(i, outcomes.length)}
-            selected={isSelected(o.id)}
-            sublabel={teams ? resolveMoneylineLabel(o, market, teams, i) : undefined}
-          />
-        ))}
+        {outcomes.map((o, i) => {
+          const isDraw = /draw|ничья/i.test(o.label);
+          const color = isDraw ? 'gold' : i === 0 ? 'win' : 'lose';
+          return (
+            <OddsPill
+              key={o.id}
+              outcome={o}
+              market={market}
+              event={event}
+              onPick={onPick}
+              color={color}
+              selected={isSelected(o.id)}
+              sublabel={teams ? resolveMoneylineLabel(o, market, teams, i) : undefined}
+            />
+          );
+        })}
       </div>
     </div>
   );
