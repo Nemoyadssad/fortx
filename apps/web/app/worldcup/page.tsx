@@ -371,8 +371,8 @@ function MatchRow({
   // NOTE: adjust this path to whatever route actually renders your event/market
   // detail page (the "Player Props" style page) — I don't have that file, so
   // I'm guessing `/markets/[id]` based on the screenshot you shared.
-  const openEvent = useCallback(() => {
-    router.push(`/markets/${event.id}`);
+ const openEvent = useCallback(() => {
+    router.push(`/event/${event.id}`);
   }, [router, event.id]);
 
   return (
