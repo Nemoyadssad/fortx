@@ -134,9 +134,6 @@ export class PolymarketService {
 
   /** GET /events with query params. Public endpoint, no auth needed. */
   async getEvents(
-    
-  /** GET /events with query params. Public endpoint, no auth needed. */
-  async getEvents(
     params: Record<string, string | number | boolean> = {},
   ): Promise<GammaEvent[]> {
     const qs = new URLSearchParams(
