@@ -144,11 +144,11 @@ function OddsPill({
     <button
       disabled={!tradable}
       onClick={() => onPick({ event, market, outcome })}
-      className={`flex flex-col items-center justify-center rounded-xl border px-3 py-2 text-center transition disabled:opacity-40 ${colorMap[color]} ${
+      className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center transition active:scale-[0.97] disabled:opacity-40 ${colorMap[color]} ${
         selected ? 'ring-2 ring-gold/70' : ''
       }`}
     >
-      <span className="text-[10px] uppercase tracking-wider opacity-70 mb-0.5 truncate max-w-[6rem]">
+      <span className="text-[10px] uppercase tracking-wider opacity-70 leading-tight line-clamp-1">
         {sublabel ?? outcome.label}
       </span>
       <span className="font-mono text-sm font-bold tabular-nums">{pctVal}¢</span>
@@ -174,9 +174,9 @@ function MarketColumn({
 }) {
   if (!market || !market.outcomes?.length) {
     return (
-      <div className="flex flex-col gap-1.5 min-w-[140px]">
+      <div className="flex flex-col gap-1.5 w-full">
         <span className="text-[10px] text-fg/25 uppercase tracking-widest font-mono">{label}</span>
-        <div className="rounded-xl border border-dashed border-fg/10 px-3 py-2 text-center text-[11px] text-fg/25">
+        <div className="rounded-xl border border-dashed border-fg/10 px-3 py-3 text-center text-[11px] text-fg/25">
           Нет рынка
         </div>
       </div>
@@ -184,7 +184,7 @@ function MarketColumn({
   }
   const outcomes = market.outcomes.slice(0, 3);
   return (
-    <div className="flex flex-col gap-1.5 min-w-[140px]">
+    <div className="flex flex-col gap-1.5 w-full">
       <span className="text-[10px] text-fg/35 uppercase tracking-widest font-mono truncate">{label}</span>
       <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${outcomes.length}, 1fr)` }}>
         {outcomes.map((o, i) => (
@@ -260,38 +260,36 @@ function MatchRow({
   const volume = formatVolume((event as any).volume ?? (event as any).liquidity);
 
   return (
-    <div className="panel panel-hover rounded-2xl overflow-hidden animate-riseIn">
-      <div className="flex flex-col lg:flex-row lg:items-center gap-4 p-4">
-        {/* Left: time / volume / teams */}
-        <div className="flex items-center justify-between gap-3 lg:w-56 lg:shrink-0">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              {isLive && <LiveBadge />}
-              <MatchTimeBadge iso={event.closesAt} />
-            </div>
-            {volume && <span className="text-[10px] text-fg/30 font-mono">{volume} объём</span>}
+    <div className="panel panel-hover rounded-2xl overflow-hidden animate-riseIn transition-shadow hover:shadow-[0_0_0_1px_rgba(212,175,55,0.15)]">
+      <div className="p-4 sm:p-5 flex flex-col gap-4">
+        {/* Top: live/time badge + volume */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            {isLive && <LiveBadge />}
+            <MatchTimeBadge iso={event.closesAt} />
           </div>
+          {volume && <span className="text-[10px] text-fg/30 font-mono">{volume} объём</span>}
         </div>
 
-        <div className="flex flex-col gap-2 lg:w-56 lg:shrink-0">
-          {teams ? (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-xl leading-none">{getFlag(teams[0])}</span>
-                <span className="text-sm font-semibold text-fg/90 truncate">{teams[0]}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl leading-none">{getFlag(teams[1])}</span>
-                <span className="text-sm font-semibold text-fg/90 truncate">{teams[1]}</span>
-              </div>
-            </>
-          ) : (
-            <span className="text-sm font-semibold text-fg/90">{event.title}</span>
-          )}
-        </div>
+        {/* Teams row */}
+        {teams ? (
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className="text-2xl leading-none shrink-0">{getFlag(teams[0])}</span>
+              <span className="text-sm font-bold text-fg/90 truncate">{teams[0]}</span>
+            </div>
+            <span className="shrink-0 text-[10px] font-mono uppercase tracking-widest text-fg/25">vs</span>
+            <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+              <span className="text-sm font-bold text-fg/90 truncate text-right">{teams[1]}</span>
+              <span className="text-2xl leading-none shrink-0">{getFlag(teams[1])}</span>
+            </div>
+          </div>
+        ) : (
+          <span className="text-sm font-bold text-fg/90">{event.title}</span>
+        )}
 
-        {/* Right: market columns, horizontally scrollable on small screens */}
-        <div className="flex-1 flex gap-4 overflow-x-auto pb-1">
+        {/* Markets: stacked on mobile, three columns from sm+ */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <MarketColumn label="Moneyline" market={moneyline} event={event} onPick={onPick} isSelected={isSelected} />
           <MarketColumn label="Спред" market={spread} event={event} onPick={onPick} isSelected={isSelected} />
           <MarketColumn label="Тотал" market={total} event={event} onPick={onPick} isSelected={isSelected} />
@@ -340,11 +338,35 @@ function DateGroupHeader({ label }: { label: string }) {
 // the "Комбо" carousel isn't empty. Purely client-side heuristics.
 type ComboSuggestion = { title: string; legs: Leg[] };
 
+// A "real match" is a two-team event, e.g. "France vs Spain" — this excludes
+// single-question prop markets ("World Cup: Number of Missed Penalties") that
+// only have one market and would otherwise get misread as a moneyline.
+function isRealMatch(event: EventItem): boolean {
+  return parseTeams(event.title) !== null;
+}
+
+// price === 0 or price === 1 means the market is resolved/closed — never
+// build a combo leg out of those, it makes the combined odds meaningless.
+function isTradable(outcome: Outcome): boolean {
+  const p = parseFloat(outcome.price);
+  return p > 0 && p < 1;
+}
+
 function buildComboSuggestions(events: EventItem[]): ComboSuggestion[] {
-  const withMoneyline = events
+  const now = Date.now();
+  const openMatches = events.filter((e) => {
+    if (!isRealMatch(e)) return false;
+    const closes = e.closesAt ? new Date(e.closesAt).getTime() : null;
+    return closes === null || closes > now;
+  });
+
+  const withMoneyline = openMatches
     .map((e) => {
       const { moneyline } = pickMarkets(e);
-      return moneyline ? { event: e, market: moneyline } : null;
+      if (!moneyline) return null;
+      const tradableOutcomes = moneyline.outcomes.filter(isTradable);
+      if (tradableOutcomes.length < 2) return null;
+      return { event: e, market: { ...moneyline, outcomes: tradableOutcomes } };
     })
     .filter(Boolean) as { event: EventItem; market: Market }[];
 
@@ -355,10 +377,10 @@ function buildComboSuggestions(events: EventItem[]): ComboSuggestion[] {
     return { event, market, outcome: best };
   });
 
-  const totalsLegs: Leg[] = events
+  const totalsLegs: Leg[] = openMatches
     .map((e) => {
       const { total } = pickMarkets(e);
-      const over = total?.outcomes.find((o) => /over|бол/i.test(o.label));
+      const over = total?.outcomes.filter(isTradable).find((o) => /over|бол/i.test(o.label));
       return total && over ? { event: e, market: total, outcome: over } : null;
     })
     .filter(Boolean)
@@ -377,8 +399,14 @@ function buildComboSuggestions(events: EventItem[]): ComboSuggestion[] {
 }
 
 function comboMultiplier(legs: Leg[]): number {
-  const combinedProb = legs.reduce((acc, l) => acc * Math.max(parseFloat(l.outcome.price), 0.001), 1);
-  return 1 / combinedProb;
+  // Every leg here should already be tradable (filtered upstream), but this
+  // guard keeps a single bad price from producing an absurd multiplier
+  // instead of quietly ignoring it.
+  const tradableLegs = legs.filter((l) => isTradable(l.outcome));
+  if (tradableLegs.length === 0) return 1;
+  const combinedProb = tradableLegs.reduce((acc, l) => acc * parseFloat(l.outcome.price), 1);
+  const mult = 1 / Math.max(combinedProb, 0.0001);
+  return Math.min(mult, 500); // sanity cap so a stray edge case can't render as 6-digit odds
 }
 
 function ComboCard({ suggestion, onUse }: { suggestion: ComboSuggestion; onUse: (legs: Leg[]) => void }) {
@@ -443,7 +471,10 @@ function ComboSlip({
   const payout = amount * mult;
 
   return (
-    <div className="fixed bottom-0 right-0 lg:static lg:sticky lg:top-6 w-full lg:w-[320px] panel rounded-t-2xl lg:rounded-2xl p-5 z-30 shadow-2xl">
+    <div
+      className="fixed inset-x-0 bottom-0 lg:static lg:sticky lg:top-6 w-full lg:w-[320px] panel border-t border-gold/10 lg:border rounded-t-2xl lg:rounded-2xl p-5 z-30 shadow-2xl max-h-[80vh] overflow-y-auto"
+      style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+    >
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-bold text-fg/85">Комбо · {legs.length} исходов</span>
         <button onClick={onClear} className="text-[11px] text-fg/40 hover:text-fg/70">Очистить</button>
@@ -491,13 +522,20 @@ function ComboSlip({
 // ─── Stats / hero ─────────────────────────────────────────────────────────────
 function HeroBanner({ events, lastUpdated }: { events: EventItem[]; lastUpdated: Date | null }) {
   return (
-    <div className="mb-6">
-      <h1 className="font-display text-3xl font-bold text-fg/95 leading-none mb-1">Чемпионат мира</h1>
-      <p className="text-sm text-fg/45">
+    <div className="relative overflow-hidden rounded-2xl border border-gold/10 bg-gradient-to-br from-[#1a1500] via-[#0e0e0e] to-[#001a0a] px-5 py-6 sm:px-8 sm:py-8 mb-6">
+      <div className="pointer-events-none absolute -top-16 left-1/3 h-40 w-80 rounded-full bg-gold/10 blur-3xl" />
+      <div className="relative flex items-center gap-3 mb-2">
+        <span className="text-3xl sm:text-4xl">🏆</span>
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-gold/60 mb-0.5">FIFA</p>
+          <h1 className="font-display text-xl sm:text-2xl md:text-3xl font-bold text-fg/95 leading-none">Чемпионат мира</h1>
+        </div>
+      </div>
+      <p className="relative text-xs sm:text-sm text-fg/45 max-w-md leading-relaxed">
         Прогнозы и котировки чемпионата мира в реальном времени
         {lastUpdated && (
           <>
-            {'  ·  '}Обновлено {lastUpdated.toLocaleDateString('ru-RU')} г.
+            {' · '}Обновлено {lastUpdated.toLocaleDateString('ru-RU')} г.
           </>
         )}
       </p>
@@ -511,12 +549,12 @@ type Tab = (typeof TABS)[number];
 
 function TopTabs({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }) {
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-1 overflow-x-auto pb-1">
       {TABS.map((t) => (
         <button
           key={t}
           onClick={() => onChange(t)}
-          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+          className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition ${
             value === t
               ? 'bg-fg/[0.06] text-fg/90'
               : 'text-fg/40 hover:text-fg/70 hover:bg-fg/[0.03]'
@@ -532,19 +570,17 @@ function TopTabs({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }
 // ─── Search + filter ──────────────────────────────────────────────────────────
 function SearchBar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="relative">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <circle cx="11" cy="11" r="7" />
-          <path strokeLinecap="round" d="m21 21-4.3-4.3" />
-        </svg>
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Поиск"
-          className="rounded-lg bg-fg/[0.04] border border-fg/[0.06] pl-9 pr-3 py-2 text-sm text-fg/80 placeholder:text-fg/30 focus:outline-none focus:border-gold/40 w-40 sm:w-56"
-        />
-      </div>
+    <div className="relative w-full sm:w-auto">
+      <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <circle cx="11" cy="11" r="7" />
+        <path strokeLinecap="round" d="m21 21-4.3-4.3" />
+      </svg>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Поиск"
+        className="w-full rounded-lg bg-fg/[0.04] border border-fg/[0.06] pl-9 pr-3 py-2 text-sm text-fg/80 placeholder:text-fg/30 focus:outline-none focus:border-gold/40 sm:w-56"
+      />
     </div>
   );
 }
@@ -811,93 +847,93 @@ export default function WorldCupPage() {
     setSelection(null);
   }, []);
 
+  const removeComboLeg = useCallback((outcomeId: string) => {
+    setComboLegs((prev) => prev.filter((l) => l.outcome.id !== outcomeId));
+  }, []);
+
+  const clearCombo = useCallback(() => setComboLegs([]), []);
+
   return (
     <>
-      <div className="mx-auto max-w-6xl px-5 py-8 lg:pr-[360px]">
-        <HeroBanner events={events} lastUpdated={lastUpdated} />
+      <div className="mx-auto max-w-6xl px-4 sm:px-5 py-6 sm:py-8 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start">
+        {/* Main column */}
+        <div className="min-w-0">
+          <HeroBanner events={events} lastUpdated={lastUpdated} />
 
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-          <TopTabs value={tab} onChange={setTab} />
-          <div className="flex items-center gap-2">
-            <SearchBar value={search} onChange={setSearch} />
-            <button
-              onClick={() => setComboMode((v) => !v)}
-              className={`rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider border transition ${
-                comboMode
-                  ? 'bg-purple-400/15 border-purple-400/40 text-purple-200'
-                  : 'border-fg/10 text-fg/40 hover:text-fg/70'
-              }`}
-            >
-              Комбо
-            </button>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+            <TopTabs value={tab} onChange={setTab} />
+            <div className="flex items-center gap-2">
+              <SearchBar value={search} onChange={setSearch} />
+              <button
+                onClick={() => setComboMode((v) => !v)}
+                className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider border transition ${
+                  comboMode
+                    ? 'bg-purple-400/15 border-purple-400/40 text-purple-200'
+                    : 'border-fg/10 text-fg/40 hover:text-fg/70'
+                }`}
+              >
+                Комбо
+              </button>
+            </div>
           </div>
-        </div>
 
-        {tab === 'Матчи' && (
-          <>
-            <ComboCarousel events={events} onUse={handleUseCombo} />
-            <FilterTabs value={filter} onChange={setFilter} />
+          {tab === 'Матчи' && (
+            <>
+              <ComboCarousel events={events} onUse={handleUseCombo} />
+              <FilterTabs value={filter} onChange={setFilter} />
 
-            {loading ? (
-              <div className="flex flex-col gap-3">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="h-28 animate-pulse rounded-2xl bg-fg/[0.03]" />
-                ))}
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="rounded-2xl panel p-16 text-center">
-                <span className="text-5xl mb-4 block">⚽</span>
-                <p className="text-fg/50 text-lg font-display font-semibold mb-2">Матчей пока нет</p>
-                <p className="text-fg/30 text-sm max-w-sm mx-auto">
-                  Запустите синхронизацию из панели администратора или добавьте события вручную через{' '}
-                  <code className="font-mono text-gold/60">POST /admin/events</code>
-                </p>
-              </div>
-            ) : (
-              grouped.map((g) => (
-                <div key={g.label}>
-                  <DateGroupHeader label={g.label} />
-                  <div className="flex flex-col gap-3">
-                    {g.events.map((e) => (
-                      <MatchRow key={e.id} event={e} onPick={handlePick} isSelected={isSelected} />
-                    ))}
-                  </div>
+              {loading ? (
+                <div className="flex flex-col gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-40 sm:h-28 animate-pulse rounded-2xl bg-fg/[0.03]" />
+                  ))}
                 </div>
-              ))
-            )}
-          </>
-        )}
-
-        {tab === 'Спецринки' && <SpecialsView events={filtered} onPick={handlePick} isSelected={isSelected} />}
-        {tab === 'Сетка' && <BracketView events={filtered} />}
-        {tab === 'Карта' && <LiveMapView events={filtered} />}
-      </div>
-
-      {/* Right-hand slip: single-pick BetSlip, or the local combo slip */}
-      <div className="fixed top-0 right-0 h-full hidden lg:flex flex-col justify-center px-6 w-[360px] pointer-events-none">
-        <div className="pointer-events-auto">
-          {comboMode ? (
-            <ComboSlip
-              legs={comboLegs}
-              onRemove={(id) => setComboLegs((prev) => prev.filter((l) => l.outcome.id !== id))}
-              onClear={() => setComboLegs([])}
-              requireAuth={requireAuth}
-            />
-          ) : (
-            <BetSlip selection={selection} onClose={() => setSelection(null)} requireAuth={requireAuth} />
+              ) : filtered.length === 0 ? (
+                <div className="rounded-2xl panel p-10 sm:p-16 text-center">
+                  <span className="text-5xl mb-4 block">⚽</span>
+                  <p className="text-fg/50 text-lg font-display font-semibold mb-2">Матчей пока нет</p>
+                  <p className="text-fg/30 text-sm max-w-sm mx-auto">
+                    Запустите синхронизацию из панели администратора или добавьте события вручную через{' '}
+                    <code className="font-mono text-gold/60">POST /admin/events</code>
+                  </p>
+                </div>
+              ) : (
+                grouped.map((g) => (
+                  <div key={g.label}>
+                    <DateGroupHeader label={g.label} />
+                    <div className="flex flex-col gap-3">
+                      {g.events.map((e) => (
+                        <MatchRow key={e.id} event={e} onPick={handlePick} isSelected={isSelected} />
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
           )}
+
+          {tab === 'Спецринки' && <SpecialsView events={filtered} onPick={handlePick} isSelected={isSelected} />}
+          {tab === 'Сетка' && <BracketView events={filtered} />}
+          {tab === 'Карта' && <LiveMapView events={filtered} />}
         </div>
+
+        {/* Desktop aside: only used for the combo slip, which needs to sit in a
+           real column. BetSlip renders itself as a fixed dock/sheet (see below)
+           so it isn't placed here — wrapping it broke its own responsive logic. */}
+        <aside className="hidden lg:block lg:sticky lg:top-6">
+          {comboMode && <ComboSlip legs={comboLegs} onRemove={removeComboLeg} onClear={clearCombo} requireAuth={requireAuth} />}
+        </aside>
       </div>
 
-      {/* Mobile combo slip, docked to the bottom */}
+      {/* Single-pick bet slip: rendered exactly as the existing component expects,
+         with no extra positioning wrapper, so it keeps its own mobile/desktop
+         behavior (it disappears entirely when `selection` is null). */}
+      {!comboMode && <BetSlip selection={selection} onClose={() => setSelection(null)} requireAuth={requireAuth} />}
+
+      {/* Mobile-only combo dock (the aside column above is hidden below lg) */}
       <div className="lg:hidden">
         {comboMode && comboLegs.length > 0 && (
-          <ComboSlip
-            legs={comboLegs}
-            onRemove={(id) => setComboLegs((prev) => prev.filter((l) => l.outcome.id !== id))}
-            onClear={() => setComboLegs([])}
-            requireAuth={requireAuth}
-          />
+          <ComboSlip legs={comboLegs} onRemove={removeComboLeg} onClear={clearCombo} requireAuth={requireAuth} />
         )}
       </div>
     </>
