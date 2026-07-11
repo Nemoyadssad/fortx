@@ -60,6 +60,7 @@ async importWorldCup(): Promise<number> {
         { tag_id: tagId, order: 'endDate', ascending: true },
         500,
         'World Cup',
+        { closed: false }, // no active:true — pull matches not yet open for trading too
       );
       break; // нашли — хватит
     }
@@ -99,25 +100,14 @@ async importWorldCup(): Promise<number> {
   async importOpen(): Promise<number> {
     let total = 0;
 
-    // FIFA World Cup 2026 — run this FIRST so it's guaranteed to land quickly,
-    // without waiting on the much larger general passes below.
-    // Sorted by soonest end date so today's/tomorrow's live matches surface first,
-    // and category is force-set to "World Cup" regardless of what Polymarket sends.
+    // FIFA World Cup 2026 — full multi-tag/slug search (importWorldCup),
+    // now run on every automatic sync tick, not just via the manual admin endpoint.
     try {
-      const worldCupTag = await this.polymarket.findTagId('fifa world cup');
-      if (worldCupTag) {
-        const wc = await this.importPass(
-          { tag_id: worldCupTag, order: 'endDate', ascending: true },
-          300,
-          'World Cup',
-        );
-        total += wc;
-        this.logger.log(`World Cup tag pass (by soonest match): +${wc} markets`);
-      } else {
-        this.logger.warn('World Cup tag not found via /tags lookup.');
-      }
+      const wc = await this.importWorldCup();
+      total += wc;
+      this.logger.log(`World Cup full pass: +${wc} markets`);
     } catch (e) {
-      this.logger.warn(`World Cup tag pass failed: ${(e as Error).message}`);
+      this.logger.warn(`World Cup pass failed: ${(e as Error).message}`);
     }
 
     // Popular markets by 24h volume — the headline events.
@@ -218,6 +208,7 @@ private async importPass(
     extra: Record<string, any>,
     maxEvents: number,
     forceCategory?: string,
+    baseFilters: Record<string, any> = { active: true, closed: false },
   ): Promise<number> {
     const pageSize = 100;
     let count = 0;
@@ -226,11 +217,9 @@ private async importPass(
       const events = await this.polymarket.getEvents({
         limit: pageSize,
         offset,
-        active: true,
-        closed: false,
+        ...baseFilters,
         ...extra,
       });
-      if (!events.length) break;
 
       for (const ev of events) {
         if (!ev.markets?.length) continue;
