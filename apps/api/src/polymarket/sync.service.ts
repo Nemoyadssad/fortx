@@ -52,7 +52,7 @@ export class SyncService implements OnModuleInit {
     // FIFA World Cup 2026 — run this FIRST so it's guaranteed to land quickly,
     // without waiting on the much larger general passes below.
     try {
-      const worldCupTag = await this.polymarket.findTagId('world cup');
+      const worldCupTag = await this.polymarket.findTagId('fifa world cup');
       if (worldCupTag) {
         const wc = await this.importPass({ tag_id: worldCupTag, order: 'volume', ascending: false }, 1000);
         total += wc;
@@ -110,13 +110,13 @@ export class SyncService implements OnModuleInit {
     for (const ev of events) {
       if (!ev.markets?.length) continue;
       try {
-        const event = await this.prisma.event.upsert({
+       const event = await this.prisma.event.upsert({
           where: { source_sourceId: { source: 'POLYMARKET', sourceId: ev.id } },
           update: {
             title: ev.title,
             description: ev.description ?? null,
             imageUrl: ev.image ?? null,
-            category: ev.category ?? null,
+            category: 'World Cup',
             status: ev.closed ? 'CLOSED' : 'OPEN',
             closesAt: ev.endDate ? new Date(ev.endDate) : null,
           },
@@ -127,7 +127,7 @@ export class SyncService implements OnModuleInit {
             title: ev.title,
             description: ev.description ?? null,
             imageUrl: ev.image ?? null,
-            category: ev.category ?? null,
+            category: 'World Cup',
             status: ev.closed ? 'CLOSED' : 'OPEN',
             closesAt: ev.endDate ? new Date(ev.endDate) : null,
           },
