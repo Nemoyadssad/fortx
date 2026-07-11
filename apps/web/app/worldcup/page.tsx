@@ -312,39 +312,50 @@ function MatchRow({
   const volume = formatVolume((event as any).volume ?? (event as any).liquidity);
 
   return (
-    <div className="panel panel-hover rounded-2xl overflow-hidden animate-riseIn transition-shadow hover:shadow-[0_0_0_1px_rgba(212,175,55,0.15)]">
-      <div className="p-4 sm:p-5 flex flex-col gap-4">
-        {/* Top: live/time badge + volume */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            {isLive && <LiveBadge />}
-            <MatchTimeBadge iso={event.closesAt} />
+    <div className="panel panel-hover rounded-2xl overflow-hidden animate-riseIn transition-all hover:shadow-[0_0_0_1px_rgba(212,175,55,0.18)] hover:-translate-y-[1px]">
+      <div className="p-5 sm:p-6 flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
+        {/* Left: live/time + teams, fixed width on desktop so market columns align across rows */}
+        <div className="flex flex-col gap-3 sm:w-[240px] sm:shrink-0">
+          <div className="flex items-center justify-between gap-3 sm:justify-start">
+            <div className="flex items-center gap-2">
+              {isLive && <LiveBadge />}
+              <MatchTimeBadge iso={event.closesAt} />
+            </div>
+            {volume && <span className="text-[10px] text-fg/30 font-mono sm:hidden">{volume} объём</span>}
           </div>
-          {volume && <span className="text-[10px] text-fg/30 font-mono">{volume} объём</span>}
+
+          {teams ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2.5">
+                <Flag name={teams[0]} className="w-8 h-5.5" />
+                <span className="text-[15px] font-bold text-fg/90 leading-tight">{teams[0]}</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <Flag name={teams[1]} className="w-8 h-5.5" />
+                <span className="text-[15px] font-bold text-fg/90 leading-tight">{teams[1]}</span>
+              </div>
+            </div>
+          ) : (
+            <span className="text-sm font-bold text-fg/90">{event.title}</span>
+          )}
+
+          {volume && <span className="hidden sm:block text-[10px] text-fg/30 font-mono">{volume} объём</span>}
         </div>
 
-        {/* Teams row */}
-        {teams ? (
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <div className="flex items-center gap-2">
-              <Flag name={teams[0]} className="w-7 h-5" />
-              <span className="text-sm font-bold text-fg/90">{teams[0]}</span>
-            </div>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-fg/25">vs</span>
-            <div className="flex items-center gap-2">
-              <Flag name={teams[1]} className="w-7 h-5" />
-              <span className="text-sm font-bold text-fg/90">{teams[1]}</span>
-            </div>
-          </div>
-        ) : (
-          <span className="text-sm font-bold text-fg/90">{event.title}</span>
-        )}
+        {/* Divider between teams and markets — only on desktop where they sit side by side */}
+        <div className="hidden sm:block w-px self-stretch bg-fg/[0.06]" />
 
         {/* Markets: stacked on mobile, three columns from sm+ */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <MarketColumn label="Moneyline" market={moneyline} event={event} onPick={onPick} isSelected={isSelected} />
-          <MarketColumn label="Спред" market={spread} event={event} onPick={onPick} isSelected={isSelected} />
-          <MarketColumn label="Тотал" market={total} event={event} onPick={onPick} isSelected={isSelected} />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:flex-1 sm:divide-x sm:divide-fg/[0.05]">
+          <div className="sm:pr-3">
+            <MarketColumn label="Moneyline" market={moneyline} event={event} onPick={onPick} isSelected={isSelected} />
+          </div>
+          <div className="sm:px-3">
+            <MarketColumn label="Спред" market={spread} event={event} onPick={onPick} isSelected={isSelected} />
+          </div>
+          <div className="sm:pl-3">
+            <MarketColumn label="Тотал" market={total} event={event} onPick={onPick} isSelected={isSelected} />
+          </div>
         </div>
       </div>
 
@@ -890,7 +901,7 @@ export default function WorldCupPage() {
 
   const load = useCallback(async () => {
     try {
-      const data = await api.events(1500, { category: 'World Cup' });
+      const data = await api.events(1500);
       const all = Array.isArray(data) ? data : [];
      const EXCLUDE_KEYWORDS = ['t20', 'cricket', 'odi', 'dota', 'csgo', 'league of legends', 'rugby', 'nascar'];
       setEvents(
@@ -1025,6 +1036,10 @@ export default function WorldCupPage() {
                 <div className="rounded-2xl panel p-10 sm:p-16 text-center">
                   <span className="text-5xl mb-4 block">⚽</span>
                   <p className="text-fg/50 text-lg font-display font-semibold mb-2">Матчей пока нет</p>
+                  <p className="text-fg/30 text-sm max-w-sm mx-auto">
+                    Запустите синхронизацию из панели администратора или добавьте события вручную через{' '}
+                    <code className="font-mono text-gold/60">POST /admin/events</code>
+                  </p>
                 </div>
               ) : (
                 grouped.map((g) => (
