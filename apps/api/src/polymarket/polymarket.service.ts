@@ -157,3 +157,4 @@ export class PolymarketService {
       clearTimeout(timeout);
     }
   }
+}
