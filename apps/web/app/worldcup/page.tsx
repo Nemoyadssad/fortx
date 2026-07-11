@@ -226,11 +226,9 @@ function MarketColumn({
 }) {
   if (!market || !market.outcomes?.length) {
     return (
-      <div className="flex flex-col gap-1.5 w-full">
-        <span className="text-[10px] text-fg/25 uppercase tracking-widest font-mono">{label}</span>
-        <div className="rounded-xl border border-dashed border-fg/10 px-3 py-3 text-center text-[11px] text-fg/25">
-          Нет рынка
-        </div>
+      <div className="flex flex-col gap-1.5 w-full sm:justify-center sm:h-full">
+        <span className="text-[10px] text-fg/20 uppercase tracking-widest font-mono hidden sm:block">{label}</span>
+        <span className="text-[11px] text-fg/20 sm:text-fg/15">Рынок закрыт</span>
       </div>
     );
   }
@@ -345,15 +343,16 @@ function MatchRow({
         {/* Divider between teams and markets — only on desktop where they sit side by side */}
         <div className="hidden sm:block w-px self-stretch bg-fg/[0.06]" />
 
-        {/* Markets: stacked on mobile, three columns from sm+ */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:flex-1 sm:divide-x sm:divide-fg/[0.05]">
-          <div className="sm:pr-3">
+        {/* Markets: stacked on mobile, three columns from sm+. Empty markets shrink instead
+           of claiming an equal third, so a moneyline-only match doesn't look mostly blank. */}
+        <div className="grid grid-cols-1 sm:flex sm:flex-1 gap-3 sm:divide-x sm:divide-fg/[0.05]">
+          <div className={`sm:pr-3 ${moneyline?.outcomes?.length ? 'sm:flex-[2]' : 'sm:flex-[0.6]'}`}>
             <MarketColumn label="Moneyline" market={moneyline} event={event} onPick={onPick} isSelected={isSelected} />
           </div>
-          <div className="sm:px-3">
+          <div className={`sm:px-3 ${spread?.outcomes?.length ? 'sm:flex-[2]' : 'sm:flex-[0.6]'}`}>
             <MarketColumn label="Спред" market={spread} event={event} onPick={onPick} isSelected={isSelected} />
           </div>
-          <div className="sm:pl-3">
+          <div className={`sm:pl-3 ${total?.outcomes?.length ? 'sm:flex-[2]' : 'sm:flex-[0.6]'}`}>
             <MarketColumn label="Тотал" market={total} event={event} onPick={onPick} isSelected={isSelected} />
           </div>
         </div>
