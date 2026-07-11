@@ -1064,10 +1064,6 @@ export default function WorldCupPage() {
                 <div className="rounded-2xl panel p-10 sm:p-16 text-center">
                   <span className="text-5xl mb-4 block">⚽</span>
                   <p className="text-fg/50 text-lg font-display font-semibold mb-2">Матчей пока нет</p>
-                  <p className="text-fg/30 text-sm max-w-sm mx-auto">
-                    Запустите синхронизацию из панели администратора или добавьте события вручную через{' '}
-                    <code className="font-mono text-gold/60">POST /admin/events</code>
-                  </p>
                 </div>
               ) : (
                 grouped.map((g) => (
