@@ -46,6 +46,56 @@ export class SyncService implements OnModuleInit {
     }
   }
 
+  /** Принудительно импортирует матчи ЧМ по нескольким возможным тегам/слагам */
+async importWorldCup(): Promise<number> {
+  let total = 0;
+
+  // Перебираем разные варианты названия тега
+  const queries = ['fifa world cup', 'world cup 2026', 'world cup', 'fifa 2026'];
+  for (const q of queries) {
+    const tagId = await this.polymarket.findTagId(q);
+    if (tagId) {
+      this.logger.log(`Found World Cup tag "${q}" → id ${tagId}`);
+      total += await this.importPass(
+        { tag_id: tagId, order: 'endDate', ascending: true },
+        500,
+        'World Cup',
+      );
+      break; // нашли — хватит
+    }
+  }
+
+  // Дополнительно ищем по слагам конкретных матчей
+  const slugs = [
+    'norway-vs-argentina',
+    'argentina-vs',
+    'norway-vs',
+    'will-norway-win',
+    'will-argentina-win',
+  ];
+  for (const slug of slugs) {
+    try {
+      const events = await this.polymarket.getEvents({ slug, limit: 10 });
+      total += await this.importEventList(events);
+    } catch { /* ignore */ }
+  }
+
+  // Текстовый поиск через Gamma
+  try {
+    const events = await this.polymarket.getEvents({
+      limit: 200,
+      order: 'endDate',
+      ascending: true,
+      tag_slug: 'world-cup',
+    });
+    total += await this.importEventList(
+      events.map(e => ({ ...e }))
+    );
+  } catch { /* ignore */ }
+
+  return total;
+}
+
   async importOpen(): Promise<number> {
     let total = 0;
 

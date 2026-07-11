@@ -45,6 +45,12 @@ export class PolymarketController {
     });
   }
 
+  @Roles('ADMIN', 'SUPERADMIN')
+@Post('admin/sync/worldcup')
+triggerWorldCupSync() {
+  return this.sync.importWorldCup();
+}
+
   /** Public: price history for a market's outcomes (for the featured chart). */
   @Public()
   @Get('markets/:id/history')
