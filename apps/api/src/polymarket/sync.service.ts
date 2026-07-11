@@ -119,6 +119,7 @@ export class SyncService implements OnModuleInit {
             category: 'World Cup',
             status: ev.closed ? 'CLOSED' : 'OPEN',
             closesAt: ev.endDate ? new Date(ev.endDate) : null,
+            createdAt: new Date(), // bump so it stays within the "recent 3000" window returned by /events
           },
           create: {
             source: 'POLYMARKET',
