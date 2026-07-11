@@ -81,16 +81,16 @@ export function CategoryBar({
               className="w-40 rounded-lg border hairline bg-fg/[0.03] px-3 py-1.5 text-sm outline-none transition focus:border-gold/50 sm:w-56"
             />
           )}
-          <button onClick={() => setSearchOpen((v) => !v)} className="rounded-lg p-2 text-fg/45 transition hover:bg-fg/[0.05] hover:text-fg" aria-label="Search">
-            <Search className="h-4 w-4" />
+          <button onClick={() => setSearchOpen((v) => !v)} className="rounded-lg p-2.5 text-fg/45 transition hover:bg-fg/[0.05] hover:text-fg" aria-label="Search">
+            <Search className="h-5 w-5" />
           </button>
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setSortOpen((v) => !v); }}
-              className={`rounded-lg p-2 transition hover:bg-fg/[0.05] ${sortOpen ? 'text-gold-deep' : 'text-fg/45 hover:text-fg'}`}
+              className={`rounded-lg p-2.5 transition hover:bg-fg/[0.05] ${sortOpen ? 'text-gold-deep' : 'text-fg/45 hover:text-fg'}`}
               aria-label="Sort"
             >
-              <SlidersHorizontal className="h-4 w-4" />
+              <SlidersHorizontal className="h-5 w-5" />
             </button>
             {sortOpen && sortOptions.length > 0 && (
               <div onClick={(e) => e.stopPropagation()} className="absolute right-0 top-10 z-30 w-44 overflow-hidden rounded-xl border border-fg/10 bg-panel2 p-1 shadow-xl">
@@ -108,8 +108,8 @@ export function CategoryBar({
               </div>
             )}
           </div>
-          <button className="rounded-lg p-2 text-fg/45 transition hover:bg-fg/[0.05] hover:text-fg" aria-label="Saved">
-            <Bookmark className="h-4 w-4" />
+          <button className="rounded-lg p-2.5 text-fg/45 transition hover:bg-fg/[0.05] hover:text-fg" aria-label="Saved">
+            <Bookmark className="h-5 w-5" />
           </button>
         </div>
       </div>
