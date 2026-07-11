@@ -47,55 +47,54 @@ export class SyncService implements OnModuleInit {
   }
 
   /** Принудительно импортирует матчи ЧМ по нескольким возможным тегам/слагам */
-async importWorldCup(): Promise<number> {
-  let total = 0;
+/** Явно захардкоженный tag_id для FIFA World Cup (футбол) на Polymarket. */
+  private readonly WORLD_CUP_TAG_ID = 102232;
 
-  // Перебираем разные варианты названия тега
-  const queries = ['fifa world cup', 'world cup 2026', 'world cup', 'fifa 2026'];
-  for (const q of queries) {
-    const tagId = await this.polymarket.findTagId(q);
-    if (tagId) {
-      this.logger.log(`Found World Cup tag "${q}" → id ${tagId}`);
-      total += await this.importPass(
-        { tag_id: tagId, order: 'endDate', ascending: true },
-        500,
-        'World Cup',
-        { closed: false }, // no active:true — pull matches not yet open for trading too
-      );
-      break; // нашли — хватит
-    }
+  /** Слова, по которым отсеиваем не-футбольные события, если вдруг проскочат в тег. */
+  private isFootballEvent(ev: { title?: string; category?: string }): boolean {
+    const text = `${ev.title ?? ''} ${ev.category ?? ''}`.toLowerCase();
+    const excluded = ['t20', 'cricket', 'odi', 'dota', 'csgo', 'league of legends', 'rugby', 'nascar'];
+    if (excluded.some((bad) => text.includes(bad))) return false;
+    return true;
   }
 
-  // Дополнительно ищем по слагам конкретных матчей
-  const slugs = [
-    'norway-vs-argentina',
-    'argentina-vs',
-    'norway-vs',
-    'will-norway-win',
-    'will-argentina-win',
-  ];
-  for (const slug of slugs) {
+  /** Принудительно импортирует все события FIFA World Cup 2026 по фиксированному tag_id, постранично. */
+  async importWorldCup(): Promise<number> {
+    let total = 0;
+    let foundCount = 0;
+    const pageSize = 100;
+    const maxEvents = 1000; // с запасом сверх ожидаемых ~639 событий
+
     try {
-      const events = await this.polymarket.getEvents({ slug, limit: 10 });
-      total += await this.importEventList(events);
-    } catch { /* ignore */ }
+      for (let offset = 0; offset < maxEvents; offset += pageSize) {
+        const events = await this.polymarket.getEvents({
+          tag_id: this.WORLD_CUP_TAG_ID,
+          closed: false,
+          order: 'endDate',
+          ascending: true,
+          limit: pageSize,
+          offset,
+        });
+        if (!events.length) break;
+
+        foundCount += events.length;
+        const football = events.filter((ev) => this.isFootballEvent(ev));
+        total += await this.importEventList(
+          football.map((ev) => ({ ...ev, category: 'World Cup' })),
+        );
+
+        if (events.length < pageSize) break; // последняя страница
+      }
+
+      this.logger.log(
+        `World Cup tag ${this.WORLD_CUP_TAG_ID}: ${foundCount} events found across all pages, ${total} markets imported`,
+      );
+    } catch (e) {
+      this.logger.warn(`World Cup tag_id pass failed: ${(e as Error).message}`);
+    }
+
+    return total;
   }
-
-  // Текстовый поиск через Gamma
-  try {
-    const events = await this.polymarket.getEvents({
-      limit: 200,
-      order: 'endDate',
-      ascending: true,
-      tag_slug: 'world-cup',
-    });
-    total += await this.importEventList(
-      events.map(e => ({ ...e }))
-    );
-  } catch { /* ignore */ }
-
-  return total;
-}
 
   async importOpen(): Promise<number> {
     let total = 0;
