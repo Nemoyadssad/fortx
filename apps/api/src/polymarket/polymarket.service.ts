@@ -132,7 +132,7 @@ export class PolymarketService {
     return null;
   }
 
-  /** GET /events with query params. Public endpoint, no auth needed. */
+ /** GET /events with query params. Public endpoint, no auth needed. */
   async getEvents(
     params: Record<string, string | number | boolean> = {},
   ): Promise<GammaEvent[]> {
@@ -141,11 +141,19 @@ export class PolymarketService {
     ).toString();
     const url = `${this.baseUrl}/events${qs ? `?${qs}` : ''}`;
 
-    const res = await fetch(url, { headers: { accept: 'application/json' } });
-    if (!res.ok) {
-      throw new Error(`Gamma /events failed: ${res.status} ${res.statusText}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(url, {
+        headers: { accept: 'application/json' },
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new Error(`Gamma /events failed: ${res.status} ${res.statusText}`);
+      }
+      const data = await res.json();
+      return Array.isArray(data) ? (data as GammaEvent[]) : [];
+    } finally {
+      clearTimeout(timeout);
     }
-    const data = await res.json();
-    return Array.isArray(data) ? (data as GammaEvent[]) : [];
   }
-}
