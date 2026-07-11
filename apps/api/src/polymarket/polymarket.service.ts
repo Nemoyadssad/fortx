@@ -104,6 +104,37 @@ export class PolymarketService {
     };
   }
 
+  private tagCache = new Map<string, number>();
+
+  /** Look up a Polymarket tag id by matching its label (e.g. "World Cup"). Cached in memory. */
+  async findTagId(query: string): Promise<number | null> {
+    const key = query.toLowerCase();
+    if (this.tagCache.has(key)) return this.tagCache.get(key)!;
+    try {
+      const res = await fetch(`${this.baseUrl}/tags?limit=1000`, {
+        headers: { accept: 'application/json' },
+      });
+      if (!res.ok) return null;
+      const tags = await res.json();
+      const match = Array.isArray(tags)
+        ? tags.find((t: any) =>
+            String(t.label ?? t.name ?? '').toLowerCase().includes(key),
+          )
+        : null;
+      if (match?.id) {
+        const id = Number(match.id);
+        this.tagCache.set(key, id);
+        return id;
+      }
+    } catch (e) {
+      this.logger.warn(`Tag lookup failed: ${(e as Error).message}`);
+    }
+    return null;
+  }
+
+  /** GET /events with query params. Public endpoint, no auth needed. */
+  async getEvents(
+    
   /** GET /events with query params. Public endpoint, no auth needed. */
   async getEvents(
     params: Record<string, string | number | boolean> = {},

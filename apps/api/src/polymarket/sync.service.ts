@@ -70,8 +70,14 @@ export class SyncService implements OnModuleInit {
     }
     // FIFA World Cup 2026 — dedicated pass so these markets always come through,
     // regardless of how they rank against everything else by volume/liquidity.
+    // Tag id is looked up by label so it doesn't depend on a hardcoded/guessed number.
     try {
-      total += await this.importPass({ tag_id: 102232, order: 'volume', ascending: false }, 1000);
+      const worldCupTag = await this.polymarket.findTagId('world cup');
+      if (worldCupTag) {
+        total += await this.importPass({ tag_id: worldCupTag, order: 'volume', ascending: false }, 1000);
+      } else {
+        this.logger.warn('World Cup tag not found via /tags lookup — skipping dedicated pass.');
+      }
     } catch (e) {
       this.logger.warn(`World Cup pass failed: ${(e as Error).message}`);
     }
