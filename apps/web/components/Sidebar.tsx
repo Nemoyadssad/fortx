@@ -7,49 +7,57 @@ import {
   HelpCircle, LifeBuoy, FileText, ShieldCheck, History, Shield, LogOut, X, Package, Palette,
 } from 'lucide-react';
 import { useAuth } from '@/app/providers';
-import { useI18n } from '@/lib/i18n';
 import { ThemeToggle } from './ThemeToggle';
 
-type Item = { href?: string; label: string; icon: any; accent?: 'gold' | 'win'; event?: string; adminOnly?: boolean; emoji?: string };
+type Item = {
+  href?: string;
+  label: string;
+  icon: any;
+  accent?: 'gold' | 'win';
+  event?: string;
+  adminOnly?: boolean;
+  emoji?: string;
+  badge?: string;
+};
 
 const GROUPS: { title: string; items: Item[] }[] = [
   {
-    title: 'group.play',
+    title: 'Play',
     items: [
-      { href: '/', label: 'nav.markets', icon: LineChart },
-      { href: '/worldcup', label: 'World Cup', icon: Trophy, accent: 'gold', emoji: '🏆' },
-      { href: '/games', label: 'nav.games', icon: Gamepad2 },
-      { href: '/leaderboard', label: 'nav.leaderboard', icon: Trophy, accent: 'gold' },
-      { href: '/calendar', label: 'nav.calendar', icon: CalendarDays },
+      { href: '/', label: 'Markets', icon: LineChart },
+      { href: '/worldcup', label: 'World Cup', icon: Trophy, accent: 'gold', emoji: '🏆', badge: 'Live' },
+      { href: '/games', label: 'Games', icon: Gamepad2 },
+      { href: '/leaderboard', label: 'Leaderboard', icon: Trophy, accent: 'gold' },
+      { href: '/calendar', label: 'Calendar', icon: CalendarDays },
     ],
   },
   {
-    title: 'group.rewards',
+    title: 'Rewards',
     items: [
-      { href: '/daily', label: 'nav.daily', icon: Gift },
-      { href: '/cases', label: 'nav.cases', icon: Package, accent: 'gold' },
+      { href: '/daily', label: 'Daily rewards', icon: Gift },
+      { href: '/cases', label: 'Mystery Cases', icon: Package, accent: 'gold' },
       { href: '/jackpot', label: 'Jackpot', icon: Trophy },
-      { href: '/wheel', label: 'nav.wheel', icon: Disc3 },
-      { href: '/vip', label: 'nav.vip', icon: Crown, accent: 'gold' },
-      { href: '/referrals', label: 'nav.invite', icon: Users, accent: 'win' },
+      { href: '/wheel', label: 'Daily wheel', icon: Disc3 },
+      { href: '/vip', label: 'VIP Club', icon: Crown, accent: 'gold' },
+      { href: '/referrals', label: 'Invite & earn 50%', icon: Users, accent: 'win' },
     ],
   },
   {
-    title: 'group.account',
+    title: 'Account',
     items: [
-      { href: '/cashier', label: 'nav.cashier', icon: Wallet },
-      { href: '/profile', label: 'nav.profile', icon: User },
-      { event: 'predikt:mybets', label: 'nav.mybets', icon: History },
-      { href: '/admin', label: 'nav.admin', icon: Shield, accent: 'gold', adminOnly: true },
+      { href: '/cashier', label: 'Cashier', icon: Wallet },
+      { href: '/profile', label: 'Profile', icon: User },
+      { event: 'predikt:mybets', label: 'My bets', icon: History },
+      { href: '/admin', label: 'Admin', icon: Shield, accent: 'gold', adminOnly: true },
     ],
   },
   {
-    title: 'group.help',
+    title: 'Help',
     items: [
-      { href: '/help', label: 'nav.help', icon: LifeBuoy },
-      { href: '/how', label: 'nav.how', icon: HelpCircle },
-      { href: '/legal/terms', label: 'nav.terms', icon: FileText },
-      { href: '/legal/responsible-gaming', label: 'nav.responsible', icon: ShieldCheck },
+      { href: '/help', label: 'Help center', icon: LifeBuoy },
+      { href: '/how', label: 'How it works', icon: HelpCircle },
+      { href: '/legal/terms', label: 'Terms of Use', icon: FileText },
+      { href: '/legal/responsible-gaming', label: 'Responsible Gaming', icon: ShieldCheck },
     ],
   },
 ];
@@ -57,7 +65,6 @@ const GROUPS: { title: string; items: Item[] }[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const { email, role, logout } = useAuth();
-  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const isAdmin = role === 'ADMIN' || role === 'SUPERADMIN';
 
@@ -76,7 +83,12 @@ export function Sidebar() {
 
   return (
     <>
-      {open && <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)} />}
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+          onClick={() => setOpen(false)}
+        />
+      )}
 
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r hairline bg-panel/95 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
@@ -85,9 +97,14 @@ export function Sidebar() {
         <div className="flex h-16 items-center justify-between border-b hairline px-5">
           <a href="/" className="flex items-center gap-2">
             <Crown className="h-5 w-5 text-gold-deep" />
-            <span className="font-display text-xl font-bold tracking-tight">FOR<span className="gold-text">TX</span></span>
+            <span className="font-display text-xl font-bold tracking-tight">
+              FOR<span className="gold-text">TX</span>
+            </span>
           </a>
-          <button onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-fg/50 hover:text-fg lg:hidden">
+          <button
+            onClick={() => setOpen(false)}
+            className="rounded-lg p-1.5 text-fg/50 hover:text-fg lg:hidden"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -98,42 +115,45 @@ export function Sidebar() {
             const items = g.items.filter((it) => !it.adminOnly || isAdmin);
             return (
               <div key={g.title} className="mb-5">
-                <p className="px-3 pb-2 font-mono text-[10px] uppercase tracking-widest text-fg/30">{t(g.title)}</p>
+                <p className="px-3 pb-2 font-mono text-[10px] uppercase tracking-widest text-fg/30">
+                  {g.title}
+                </p>
                 <div className="space-y-0.5">
                   {items.map((it) => {
                     const Icon = it.icon;
                     const active = isActive(it.href);
-                    const isWorldCup = it.href === '/worldcup';
-                    const accent = it.accent === 'win' ? 'text-win' : it.accent === 'gold' ? 'text-gold-deep' : 'text-fg/70';
+                    const isWC = it.href === '/worldcup';
 
-                    // Special World Cup item style
-                    const cls = isWorldCup
+                    const baseClass = isWC
                       ? `group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition ${
                           active
                             ? 'bg-gold/20 text-gold-deep ring-1 ring-gold/30'
-                            : 'bg-gradient-to-r from-gold/[0.08] to-transparent text-gold-deep hover:from-gold/15 hover:to-transparent'
+                            : 'bg-gradient-to-r from-gold/[0.08] to-transparent text-gold-deep hover:from-gold/15'
                         }`
                       : `group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
-                          active ? 'bg-gold/[0.10] text-gold-deep' : `${accent} hover:bg-fg/[0.04] hover:text-fg`
+                          active
+                            ? 'bg-gold/[0.10] text-gold-deep'
+                            : it.accent === 'win'
+                            ? 'text-win hover:bg-fg/[0.04] hover:text-fg'
+                            : it.accent === 'gold'
+                            ? 'text-gold-deep hover:bg-fg/[0.04] hover:text-fg'
+                            : 'text-fg/70 hover:bg-fg/[0.04] hover:text-fg'
                         }`;
 
                     const inner = (
                       <>
-                        {active && !isWorldCup && (
+                        {active && (
                           <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-gold" />
                         )}
-                        {active && isWorldCup && (
-                          <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-gold" />
-                        )}
-                        {isWorldCup && it.emoji ? (
+                        {isWC && it.emoji ? (
                           <span className="text-base leading-none">{it.emoji}</span>
                         ) : (
                           <Icon className="h-4 w-4 shrink-0" />
                         )}
                         <span className="truncate">{it.label}</span>
-                        {isWorldCup && (
+                        {it.badge && (
                           <span className="ml-auto shrink-0 rounded-full bg-win/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-win">
-                            Live
+                            {it.badge}
                           </span>
                         )}
                       </>
@@ -141,13 +161,22 @@ export function Sidebar() {
 
                     if (it.event) {
                       return (
-                        <button key={it.label} onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent(it.event!)); }} className={cls + ' text-left'}>
+                        <button
+                          key={it.label}
+                          onClick={() => {
+                            setOpen(false);
+                            window.dispatchEvent(new CustomEvent(it.event!));
+                          }}
+                          className={baseClass + ' text-left'}
+                        >
                           {inner}
                         </button>
                       );
                     }
                     return (
-                      <a key={it.label} href={it.href} className={cls}>{inner}</a>
+                      <a key={it.label} href={it.href} className={baseClass}>
+                        {inner}
+                      </a>
                     );
                   })}
                 </div>
@@ -159,15 +188,23 @@ export function Sidebar() {
         {/* footer */}
         <div className="border-t hairline p-3">
           <div className="mb-2 flex items-center justify-between rounded-xl px-3 py-1.5">
-            <span className="flex items-center gap-3 text-sm text-fg/55"><Palette className="h-4 w-4" /> Theme</span>
+            <span className="flex items-center gap-3 text-sm text-fg/55">
+              <Palette className="h-4 w-4" /> Theme
+            </span>
             <ThemeToggle />
           </div>
           {email ? (
-            <button onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-fg/55 transition hover:bg-fg/[0.04] hover:text-fg">
+            <button
+              onClick={logout}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-fg/55 transition hover:bg-fg/[0.04] hover:text-fg"
+            >
               <LogOut className="h-4 w-4" /> Log out
             </button>
           ) : (
-            <button onClick={() => window.dispatchEvent(new CustomEvent('predikt:auth'))} className="w-full rounded-xl bg-gradient-to-b from-gold to-gold-soft py-2.5 text-sm font-bold text-black shadow-gold transition hover:brightness-105">
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('predikt:auth'))}
+              className="w-full rounded-xl bg-gradient-to-b from-gold to-gold-soft py-2.5 text-sm font-bold text-black shadow-gold transition hover:brightness-105"
+            >
               Sign in
             </button>
           )}
