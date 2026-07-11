@@ -19,29 +19,87 @@ import { BetSlip } from '@/components/BetSlip';
  * slip to visually match BetSlip exactly, share that file and I'll merge them.
  */
 
-// ─── Country flag emoji helper ───────────────────────────────────────────────
-const FLAG_MAP: Record<string, string> = {
-  norway: '🇳🇴', england: '🇬🇧', argentina: '🇦🇷', switzerland: '🇨🇭',
-  france: '🇫🇷', spain: '🇪🇸', brazil: '🇧🇷', germany: '🇩🇪',
-  portugal: '🇵🇹', netherlands: '🇳🇱', usa: '🇺🇸', mexico: '🇲🇽',
-  japan: '🇯🇵', morocco: '🇲🇦', senegal: '🇸🇳', croatia: '🇭🇷',
-  belgium: '🇧🇪', uruguay: '🇺🇾', denmark: '🇩🇰', poland: '🇵🇱',
-  australia: '🇦🇺', south: '🇿🇦', ecuador: '🇪🇨', colombia: '🇨🇴',
-  chile: '🇨🇱', turkey: '🇹🇷', ukraine: '🇺🇦', sweden: '🇸🇪',
-  angola: '🇦🇴', canada: '🇨🇦', korea: '🇰🇷', iran: '🇮🇷',
-  saudi: '🇸🇦', ghana: '🇬🇭', cameroon: '🇨🇲', serbia: '🇷🇸',
-  austria: '🇦🇹', romania: '🇷🇴', czechia: '🇨🇿', slovakia: '🇸🇰',
-  hungary: '🇭🇺', greece: '🇬🇷', scotland: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', wales: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
-  tunisia: '🇹🇳', egypt: '🇪🇬', nigeria: '🇳🇬', ivory: '🇨🇮',
-  mali: '🇲🇱', algeria: '🇩🇿', qatar: '🇶🇦',
+// ─── Country flags ────────────────────────────────────────────────────────────
+// IMPORTANT: flag *emoji* are unreliable — Windows has no color-flag font and
+// renders them as bare two-letter codes (that's the "DE" / "MA" / "DZ" text
+// you saw instead of pictures). We use real flag images from flagcdn.com
+// instead, which render identically everywhere.
+const COUNTRY_CODES: Record<string, string> = {
+  norway: 'no', england: 'gb-eng', scotland: 'gb-sct', wales: 'gb-wls', 'northern ireland': 'gb-nir',
+  'united kingdom': 'gb', britain: 'gb', ireland: 'ie',
+  argentina: 'ar', switzerland: 'ch', france: 'fr', spain: 'es', brazil: 'br', germany: 'de',
+  portugal: 'pt', netherlands: 'nl', holland: 'nl', usa: 'us', 'united states': 'us', mexico: 'mx',
+  japan: 'jp', morocco: 'ma', senegal: 'sn', croatia: 'hr', belgium: 'be', uruguay: 'uy',
+  denmark: 'dk', poland: 'pl', australia: 'au', 'south africa': 'za', ecuador: 'ec', colombia: 'co',
+  chile: 'cl', turkey: 'tr', ukraine: 'ua', sweden: 'se', angola: 'ao', canada: 'ca',
+  'south korea': 'kr', korea: 'kr', 'north korea': 'kp', iran: 'ir', 'saudi arabia': 'sa',
+  ghana: 'gh', cameroon: 'cm', serbia: 'rs', austria: 'at', romania: 'ro', czechia: 'cz',
+  'czech republic': 'cz', slovakia: 'sk', hungary: 'hu', greece: 'gr', tunisia: 'tn', egypt: 'eg',
+  nigeria: 'ng', 'ivory coast': 'ci', "cote d'ivoire": 'ci', mali: 'ml', algeria: 'dz', qatar: 'qa',
+  curacao: 'cw', 'curaçao': 'cw', gibraltar: 'gi', italy: 'it', china: 'cn', india: 'in', russia: 'ru',
+  finland: 'fi', iceland: 'is', bulgaria: 'bg', slovenia: 'si', bosnia: 'ba',
+  'bosnia and herzegovina': 'ba', albania: 'al', kosovo: 'xk', 'north macedonia': 'mk',
+  montenegro: 'me', cyprus: 'cy', israel: 'il', jordan: 'jo', iraq: 'iq', uae: 'ae',
+  'united arab emirates': 'ae', kuwait: 'kw', bahrain: 'bh', oman: 'om', yemen: 'ye', lebanon: 'lb',
+  syria: 'sy', 'new zealand': 'nz', peru: 'pe', paraguay: 'py', bolivia: 'bo', venezuela: 've',
+  panama: 'pa', 'costa rica': 'cr', honduras: 'hn', jamaica: 'jm', haiti: 'ht', cuba: 'cu',
+  'dominican republic': 'do', guatemala: 'gt', 'el salvador': 'sv', nicaragua: 'ni',
+  'trinidad and tobago': 'tt', suriname: 'sr', 'dr congo': 'cd', congo: 'cg', kenya: 'ke',
+  ethiopia: 'et', zambia: 'zm', zimbabwe: 'zw', uganda: 'ug', 'burkina faso': 'bf', gabon: 'ga',
+  'cape verde': 'cv', mauritania: 'mr', libya: 'ly', sudan: 'sd', madagascar: 'mg', benin: 'bj',
+  guinea: 'gn', namibia: 'na', botswana: 'bw', mozambique: 'mz', tanzania: 'tz', vietnam: 'vn',
+  thailand: 'th', indonesia: 'id', malaysia: 'my', philippines: 'ph', singapore: 'sg',
+  'hong kong': 'hk', taiwan: 'tw', uzbekistan: 'uz', kazakhstan: 'kz', azerbaijan: 'az',
+  georgia: 'ge', armenia: 'am', belarus: 'by', lithuania: 'lt', latvia: 'lv', estonia: 'ee',
+  luxembourg: 'lu', malta: 'mt', andorra: 'ad', 'san marino': 'sm', liechtenstein: 'li',
+  moldova: 'md',
 };
 
-function getFlag(name: string): string {
-  const lower = name.toLowerCase();
-  for (const [key, flag] of Object.entries(FLAG_MAP)) {
-    if (lower.includes(key)) return flag;
+// Sorted longest-key-first so "bosnia and herzegovina" is tried before "bosnia".
+const COUNTRY_ENTRIES = Object.entries(COUNTRY_CODES).sort((a, b) => b[0].length - a[0].length);
+
+function normalizeCountry(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // strip accents (Curaçao -> curacao)
+    .replace(/[^a-z\s'-]/g, '')
+    .trim();
+}
+
+function getFlagCode(name: string): string | null {
+  const n = normalizeCountry(name);
+  if (COUNTRY_CODES[n]) return COUNTRY_CODES[n];
+  for (const [key, code] of COUNTRY_ENTRIES) {
+    if (n.includes(key)) return code;
   }
-  return '🏳️';
+  return null;
+}
+
+function Flag({ name, className = 'w-7 h-5' }: { name: string; className?: string }) {
+  const code = useMemo(() => getFlagCode(name), [name]);
+  const [errored, setErrored] = useState(false);
+
+  if (!code || errored) {
+    // No match (or the image 404'd) — show initials instead of a broken image.
+    const initials = name.replace(/[^a-zA-Zа-яА-Я\s]/g, '').trim().slice(0, 2).toUpperCase();
+    return (
+      <span className={`inline-flex shrink-0 items-center justify-center rounded-[3px] bg-fg/10 text-[9px] font-bold text-fg/40 ${className}`}>
+        {initials}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={`https://flagcdn.com/w40/${code}.png`}
+      srcSet={`https://flagcdn.com/w80/${code}.png 2x`}
+      alt=""
+      loading="lazy"
+      onError={() => setErrored(true)}
+      className={`inline-block shrink-0 rounded-[3px] object-cover ring-1 ring-fg/10 ${className}`}
+    />
+  );
 }
 
 function parseTeams(title: string): [string, string] | null {
@@ -273,15 +331,15 @@ function MatchRow({
 
         {/* Teams row */}
         {teams ? (
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <span className="text-2xl leading-none shrink-0">{getFlag(teams[0])}</span>
-              <span className="text-sm font-bold text-fg/90 truncate">{teams[0]}</span>
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <div className="flex items-center gap-2">
+              <Flag name={teams[0]} className="w-7 h-5" />
+              <span className="text-sm font-bold text-fg/90">{teams[0]}</span>
             </div>
-            <span className="shrink-0 text-[10px] font-mono uppercase tracking-widest text-fg/25">vs</span>
-            <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-              <span className="text-sm font-bold text-fg/90 truncate text-right">{teams[1]}</span>
-              <span className="text-2xl leading-none shrink-0">{getFlag(teams[1])}</span>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-fg/25">vs</span>
+            <div className="flex items-center gap-2">
+              <Flag name={teams[1]} className="w-7 h-5" />
+              <span className="text-sm font-bold text-fg/90">{teams[1]}</span>
             </div>
           </div>
         ) : (
@@ -419,7 +477,7 @@ function ComboCard({ suggestion, onUse }: { suggestion: ComboSuggestion; onUse: 
           const teams = parseTeams(l.event.title);
           return (
             <div key={l.event.id + l.market.id} className="flex items-center gap-2 text-[11px] text-fg/50">
-              {teams && <span>{getFlag(teams[0])}</span>}
+              {teams && <Flag name={teams[0]} className="w-5 h-3.5" />}
               <span className="truncate flex-1">{l.event.title}</span>
               <span className="text-gold-deep font-mono">{l.outcome.label}</span>
             </div>
@@ -677,10 +735,10 @@ function BracketView({ events }: { events: EventItem[] }) {
                   {teams ? (
                     <>
                       <div className="flex items-center gap-2 mb-1">
-                        <span>{getFlag(teams[0])}</span><span className="truncate">{teams[0]}</span>
+                        <Flag name={teams[0]} className="w-5 h-3.5" /><span className="truncate">{teams[0]}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span>{getFlag(teams[1])}</span><span className="truncate">{teams[1]}</span>
+                        <Flag name={teams[1]} className="w-5 h-3.5" /><span className="truncate">{teams[1]}</span>
                       </div>
                     </>
                   ) : (
@@ -721,9 +779,9 @@ function LiveMapView({ events }: { events: EventItem[] }) {
             <div className="flex items-center gap-3">
               {teams ? (
                 <>
-                  <span className="text-2xl">{getFlag(teams[0])}</span>
+                  <Flag name={teams[0]} className="w-6 h-4" />
                   <span className="text-sm font-semibold">{teams[0]} vs {teams[1]}</span>
-                  <span className="text-2xl">{getFlag(teams[1])}</span>
+                  <Flag name={teams[1]} className="w-6 h-4" />
                 </>
               ) : (
                 <span className="text-sm font-semibold">{e.title}</span>
