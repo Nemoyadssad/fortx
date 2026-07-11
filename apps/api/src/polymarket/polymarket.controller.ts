@@ -14,11 +14,14 @@ export class PolymarketController {
   ) {}
 
   /** Public: browse imported events with their markets and current odds. */
-  @Public()
+ @Public()
   @Get('events')
-  listEvents(@Query('take') take = '120') {
+  listEvents(@Query('take') take = '120', @Query('category') category?: string) {
     return this.prisma.event.findMany({
-      where: { status: 'OPEN' },
+      where: {
+        status: 'OPEN',
+        ...(category ? { category } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: Math.min(Number(take) || 120, 3000),
       include: {
