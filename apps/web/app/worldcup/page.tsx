@@ -134,6 +134,33 @@ function pickMarkets(event: EventItem) {
   return { moneyline, spread, total, rest };
 }
 
+// The API sends one "event" per market bucket instead of one per fixture, so the
+// same two teams at the same kickoff show up as several near-duplicate cards
+// (each with only one market populated). Collapse those into a single event
+// with all their markets combined, so the UI shows one card per real match.
+function mergeDuplicateEvents(events: EventItem[]): EventItem[] {
+  const merged = new Map<string, EventItem>();
+  for (const e of events) {
+    const teams = parseTeams(e.title);
+    const closesKey = e.closesAt ? new Date(e.closesAt).setSeconds(0, 0) : '';
+    const key = teams
+      ? `${normalizeCountry(teams[0])}|${normalizeCountry(teams[1])}|${closesKey}`
+      : `title:${e.title}|${closesKey}`;
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, { ...e, markets: [...(e.markets || [])] });
+      continue;
+    }
+    const seenIds = new Set((existing.markets || []).map((m) => m.id));
+    const seenQuestions = new Set((existing.markets || []).map((m) => (m.question || '').trim().toLowerCase()));
+    const newMarkets = (e.markets || []).filter(
+      (m) => !seenIds.has(m.id) && !seenQuestions.has((m.question || '').trim().toLowerCase()),
+    );
+    existing.markets = [...(existing.markets || []), ...newMarkets];
+  }
+  return Array.from(merged.values());
+}
+
 // ─── Shared selection types ───────────────────────────────────────────────────
 type Leg = { event: EventItem; market: Market; outcome: Outcome };
 
@@ -904,12 +931,14 @@ export default function WorldCupPage() {
       const all = Array.isArray(data) ? data : [];
      const EXCLUDE_KEYWORDS = ['t20', 'cricket', 'odi', 'dota', 'csgo', 'league of legends', 'rugby', 'nascar'];
       setEvents(
-        all.filter((e) => {
-          const category = e.category?.toLowerCase() ?? '';
-          const title = e.title?.toLowerCase() ?? '';
-          if (EXCLUDE_KEYWORDS.some((k) => title.includes(k) || category.includes(k))) return false;
-          return category === 'world cup'; // точное совпадение категории, не подстрока
-        }),
+        mergeDuplicateEvents(
+          all.filter((e) => {
+            const category = e.category?.toLowerCase() ?? '';
+            const title = e.title?.toLowerCase() ?? '';
+            if (EXCLUDE_KEYWORDS.some((k) => title.includes(k) || category.includes(k))) return false;
+            return category === 'world cup'; // точное совпадение категории, не подстрока
+          }),
+        ),
       );
       setLastUpdated(new Date());
     } catch {
@@ -998,7 +1027,7 @@ export default function WorldCupPage() {
 
   return (
     <>
-      <div className="mx-auto max-w-6xl px-4 sm:px-5 py-6 sm:py-8 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start">
+      <div className="mx-auto max-w-[1560px] px-5 sm:px-8 xl:px-12 py-6 sm:py-8 lg:grid lg:grid-cols-[1fr_380px] lg:gap-10 lg:items-start">
         {/* Main column */}
         <div className="min-w-0">
           <HeroBanner events={events} lastUpdated={lastUpdated} />
