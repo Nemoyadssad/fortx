@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import type { EventItem, Market, Outcome } from '@/lib/types';
 import { useAuth } from '@/app/providers';
@@ -254,25 +255,15 @@ function colorForIndex(i: number, len: number): 'win' | 'lose' | 'gold' {
 }
 
 // Moneyline markets often come back as a plain Yes/No question ("Will Argentina
-// win?") rather than a real two-outcome "Argentina / Switzerland" market. That
-// reads fine as a raw API payload but is useless as a bet button — "Yes" tells
-// you nothing about who you're backing. If the outcome is literally Yes/No and
-// the market question names one of the two teams, swap the label for the team
-// it actually refers to. Anything else (real 1x2 labels, prop markets) passes
-// through untouched.
-function resolveMoneylineLabel(outcome: Outcome, market: Market, teams: [string, string] | null): string {
+// win?") rather than a real two-outcome "Argentina / Switzerland" market. That's
+// useless as a bet button — "Yes" tells you nothing about who you're backing.
+// If we know the two teams and the market has exactly two outcomes, we always
+// force the labels to the team names (by outcome order) — no team-win bet
+// should ever render as bare "Yes/No" on a real match.
+function resolveMoneylineLabel(outcome: Outcome, market: Market, teams: [string, string] | null, index: number): string {
   if (!teams) return outcome.label;
-  if (!/^(yes|no)$/i.test(outcome.label.trim())) return outcome.label;
-
-  const q = (market.question || '').toLowerCase();
-  const [t0, t1] = teams;
-  const mentionsT0 = q.includes(t0.toLowerCase());
-  const mentionsT1 = q.includes(t1.toLowerCase());
-  const isYes = /^yes$/i.test(outcome.label.trim());
-
-  if (mentionsT0 && !mentionsT1) return isYes ? t0 : t1;
-  if (mentionsT1 && !mentionsT0) return isYes ? t1 : t0;
-  return outcome.label; // question doesn't clearly name a team — leave as-is
+  if (market.outcomes.length !== 2) return outcome.label;
+  return teams[index] ?? outcome.label;
 }
 
 // ─── One column of a match row (Moneyline / Спред / Тотал) ───────────────────
@@ -308,7 +299,7 @@ function MarketColumn({
             onPick={onPick}
             color={colorForIndex(i, outcomes.length)}
             selected={isSelected(o.id)}
-            sublabel={teams ? resolveMoneylineLabel(o, market, teams) : undefined}
+            sublabel={teams ? resolveMoneylineLabel(o, market, teams, i) : undefined}
           />
         ))}
       </div>
@@ -365,6 +356,7 @@ function MatchRow({
   onPick: (leg: Leg) => void;
   isSelected: (outcomeId: string) => boolean;
 }) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const teams = parseTeams(event.title);
   const t = useMatchTime(event.closesAt);
@@ -372,11 +364,23 @@ function MatchRow({
   const { moneyline, spread, total, rest } = pickMarkets(event);
   const volume = formatVolume((event as any).volume ?? (event as any).liquidity);
 
+  // NOTE: adjust this path to whatever route actually renders your event/market
+  // detail page (the "Player Props" style page) — I don't have that file, so
+  // I'm guessing `/markets/[id]` based on the screenshot you shared.
+  const openEvent = useCallback(() => {
+    router.push(`/markets/${event.id}`);
+  }, [router, event.id]);
+
   return (
     <div className="panel panel-hover rounded-2xl overflow-hidden animate-riseIn transition-all hover:shadow-[0_0_0_1px_rgba(212,175,55,0.18)] hover:-translate-y-[1px]">
       <div className="p-5 sm:p-6 flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
-        {/* Left: live/time + teams, fixed width on desktop so market columns align across rows */}
-        <div className="flex flex-col gap-3 sm:w-[240px] sm:shrink-0">
+        {/* Left: live/time + teams — clicking this block opens the full event page.
+           Odds buttons on the right are a separate area so a quick bet doesn't
+           accidentally navigate away. */}
+        <button
+          onClick={openEvent}
+          className="flex flex-col gap-3 sm:w-[240px] sm:shrink-0 text-left rounded-xl -m-1.5 p-1.5 transition hover:bg-fg/[0.03]"
+        >
           <div className="flex items-center justify-between gap-3 sm:justify-start">
             <div className="flex items-center gap-2">
               {isLive && <LiveBadge />}
@@ -401,7 +405,7 @@ function MatchRow({
           )}
 
           {volume && <span className="hidden sm:block text-[10px] text-fg/30 font-mono">{volume} объём</span>}
-        </div>
+        </button>
 
         {/* Divider between teams and markets — only on desktop where they sit side by side */}
         <div className="hidden sm:block w-px self-stretch bg-fg/[0.06]" />
