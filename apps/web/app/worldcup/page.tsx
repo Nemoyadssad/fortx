@@ -20,10 +20,6 @@ import { BetSlip } from '@/components/BetSlip';
  */
 
 // ─── Country flags ────────────────────────────────────────────────────────────
-// IMPORTANT: flag *emoji* are unreliable — Windows has no color-flag font and
-// renders them as bare two-letter codes (that's the "DE" / "MA" / "DZ" text
-// you saw instead of pictures). We use real flag images from flagcdn.com
-// instead, which render identically everywhere.
 const COUNTRY_CODES: Record<string, string> = {
   norway: 'no', england: 'gb-eng', scotland: 'gb-sct', wales: 'gb-wls', 'northern ireland': 'gb-nir',
   'united kingdom': 'gb', britain: 'gb', ireland: 'ie',
@@ -81,7 +77,6 @@ function Flag({ name, className = 'w-7 h-5' }: { name: string; className?: strin
   const [errored, setErrored] = useState(false);
 
   if (!code || errored) {
-    // No match (or the image 404'd) — show initials instead of a broken image.
     const initials = name.replace(/[^a-zA-Zа-яА-Я\s]/g, '').trim().slice(0, 2).toUpperCase();
     return (
       <span className={`inline-flex shrink-0 items-center justify-center rounded-[3px] bg-fg/10 text-[9px] font-bold text-fg/40 ${className}`}>
@@ -116,8 +111,6 @@ function formatVolume(n?: number | null): string | null {
 }
 
 // ─── Market classification helpers ───────────────────────────────────────────
-// We can't rely on a stable market "type" field existing, so we classify by
-// the question text. Adjust these regexes to match your real market copy.
 function isSpreadMarket(m: Market) {
   return /spread|handicap|\bhcp\b|\+\/-|дал|фор/i.test(m.question || '');
 }
@@ -393,19 +386,12 @@ function DateGroupHeader({ label }: { label: string }) {
 }
 
 // ─── Combo builder ────────────────────────────────────────────────────────────
-// Builds a few auto-generated parlay suggestions out of the loaded events so
-// the "Комбо" carousel isn't empty. Purely client-side heuristics.
 type ComboSuggestion = { title: string; legs: Leg[] };
 
-// A "real match" is a two-team event, e.g. "France vs Spain" — this excludes
-// single-question prop markets ("World Cup: Number of Missed Penalties") that
-// only have one market and would otherwise get misread as a moneyline.
 function isRealMatch(event: EventItem): boolean {
   return parseTeams(event.title) !== null;
 }
 
-// price === 0 or price === 1 means the market is resolved/closed — never
-// build a combo leg out of those, it makes the combined odds meaningless.
 function isTradable(outcome: Outcome): boolean {
   const p = parseFloat(outcome.price);
   return p > 0 && p < 1;
@@ -458,38 +444,76 @@ function buildComboSuggestions(events: EventItem[]): ComboSuggestion[] {
 }
 
 function comboMultiplier(legs: Leg[]): number {
-  // Every leg here should already be tradable (filtered upstream), but this
-  // guard keeps a single bad price from producing an absurd multiplier
-  // instead of quietly ignoring it.
   const tradableLegs = legs.filter((l) => isTradable(l.outcome));
   if (tradableLegs.length === 0) return 1;
   const combinedProb = tradableLegs.reduce((acc, l) => acc * parseFloat(l.outcome.price), 1);
   const mult = 1 / Math.max(combinedProb, 0.0001);
-  return Math.min(mult, 500); // sanity cap so a stray edge case can't render as 6-digit odds
+  return Math.min(mult, 500);
 }
+
+// ─── Combo card + carousel (redesigned) ───────────────────────────────────────
+const COMBO_STYLE: Record<string, { icon: string; ring: string; glow: string; chip: string }> = {
+  'Favourites acca': {
+    icon: '🔥',
+    ring: 'border-gold/20 hover:border-gold/40',
+    glow: 'from-gold/[0.08]',
+    chip: 'bg-gold/15 text-gold-deep border-gold/30',
+  },
+  'Goal rush stacks': {
+    icon: '⚡',
+    ring: 'border-win/20 hover:border-win/40',
+    glow: 'from-win/[0.08]',
+    chip: 'bg-win/15 text-win border-win/30',
+  },
+  'Underdogs handicap': {
+    icon: '🎯',
+    ring: 'border-purple-400/20 hover:border-purple-400/40',
+    glow: 'from-purple-400/[0.08]',
+    chip: 'bg-purple-400/15 text-purple-200 border-purple-400/30',
+  },
+};
 
 function ComboCard({ suggestion, onUse }: { suggestion: ComboSuggestion; onUse: (legs: Leg[]) => void }) {
   const mult = comboMultiplier(suggestion.legs);
+  const style = COMBO_STYLE[suggestion.title] ?? COMBO_STYLE['Favourites acca'];
+
   return (
-    <div className="min-w-[240px] shrink-0 rounded-2xl panel p-4 flex flex-col gap-2">
-      <p className="text-sm font-bold text-fg/85 mb-1">{suggestion.title}</p>
-      <div className="flex flex-col gap-1.5">
+    <div
+      className={`relative min-w-[280px] sm:min-w-[300px] shrink-0 overflow-hidden rounded-2xl border bg-gradient-to-b ${style.glow} to-transparent panel p-5 flex flex-col gap-3 transition ${style.ring}`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-lg leading-none">{style.icon}</span>
+          <p className="text-sm font-bold text-fg/90">{suggestion.title}</p>
+        </div>
+        <span className={`shrink-0 rounded-full border px-2.5 py-1 font-mono text-[11px] font-bold ${style.chip}`}>
+          {mult.toFixed(1)}x
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-2">
         {suggestion.legs.map((l) => {
           const teams = parseTeams(l.event.title);
           return (
-            <div key={l.event.id + l.market.id} className="flex items-center gap-2 text-[11px] text-fg/50">
-              {teams && <Flag name={teams[0]} className="w-5 h-3.5" />}
-              <span className="truncate flex-1">{l.event.title}</span>
-              <span className="text-gold-deep font-mono">{l.outcome.label}</span>
+            <div
+              key={l.event.id + l.market.id}
+              className="flex items-center gap-2 rounded-lg bg-fg/[0.03] px-2.5 py-1.5 text-[11px]"
+            >
+              {teams && <Flag name={teams[0]} className="w-4.5 h-3" />}
+              <span className="truncate flex-1 text-fg/55">
+                {teams ? `${teams[0]} vs ${teams[1]}` : l.event.title}
+              </span>
+              <span className="shrink-0 font-mono font-bold text-fg/80">{l.outcome.label}</span>
             </div>
           );
         })}
       </div>
+
       <button
         onClick={() => onUse(suggestion.legs)}
-        className="mt-2 rounded-lg bg-gold/15 border border-gold/30 text-gold-deep text-xs font-bold py-2 hover:bg-gold/25 transition"
+        className="mt-1 rounded-xl bg-gold/15 border border-gold/30 text-gold-deep text-xs font-bold py-2.5 hover:bg-gold/25 hover:border-gold/50 transition"
       >
-        {suggestion.legs.length} pick combo {mult.toFixed(1)}x
+        Собрать · {suggestion.legs.length} исхода · {mult.toFixed(1)}x
       </button>
     </div>
   );
@@ -504,10 +528,13 @@ function ComboCarousel({ events, onUse }: { events: EventItem[]; onUse: (legs: L
         <span className="text-[10px] font-mono uppercase tracking-widest text-purple-300/80 bg-purple-400/10 rounded px-2 py-0.5">
           Комбо
         </span>
+        <span className="text-[11px] text-fg/30">Готовые связки на основе текущих котировок</span>
       </div>
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory">
         {suggestions.map((s) => (
-          <ComboCard key={s.title} suggestion={s} onUse={onUse} />
+          <div key={s.title} className="snap-start">
+            <ComboCard suggestion={s} onUse={onUse} />
+          </div>
         ))}
       </div>
     </div>
@@ -578,26 +605,75 @@ function ComboSlip({
   );
 }
 
-// ─── Stats / hero ─────────────────────────────────────────────────────────────
+// ─── Stats / hero (redesigned) ─────────────────────────────────────────────────
 function HeroBanner({ events, lastUpdated }: { events: EventItem[]; lastUpdated: Date | null }) {
+  const now = Date.now();
+  const live = events.filter((e) => {
+    const t = e.closesAt ? new Date(e.closesAt).getTime() : null;
+    return t !== null && t > now && t - now < 1000 * 60 * 150;
+  }).length;
+  const upcoming = events.filter((e) => {
+    const t = e.closesAt ? new Date(e.closesAt).getTime() : null;
+    return t === null || t > now;
+  }).length;
+  const totalVolume = events.reduce((sum, e) => sum + ((e as any).volume ?? (e as any).liquidity ?? 0), 0);
+
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-gold/10 bg-gradient-to-br from-[#1a1500] via-[#0e0e0e] to-[#001a0a] px-5 py-6 sm:px-8 sm:py-8 mb-6">
-      <div className="pointer-events-none absolute -top-16 left-1/3 h-40 w-80 rounded-full bg-gold/10 blur-3xl" />
-      <div className="relative flex items-center gap-3 mb-2">
-        <span className="text-3xl sm:text-4xl">🏆</span>
+    <div className="relative overflow-hidden rounded-3xl border border-gold/15 bg-[#0a0a08] px-6 py-9 sm:px-10 sm:py-12 mb-8">
+      {/* Signature element: a pitch — center circle + halfway line, faint, top-right */}
+      <svg
+        className="pointer-events-none absolute -right-24 -top-24 h-[420px] w-[420px] opacity-[0.07] sm:-right-16 sm:-top-32"
+        viewBox="0 0 400 400"
+        fill="none"
+      >
+        <circle cx="200" cy="200" r="180" stroke="#D4AF37" strokeWidth="1.5" />
+        <circle cx="200" cy="200" r="60" stroke="#D4AF37" strokeWidth="1.5" />
+        <circle cx="200" cy="200" r="3" fill="#D4AF37" />
+        <path d="M200 20 V380" stroke="#D4AF37" strokeWidth="1.5" />
+      </svg>
+      <div className="pointer-events-none absolute -bottom-20 left-0 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -top-10 left-1/4 h-40 w-64 rounded-full bg-gold/10 blur-3xl" />
+
+      <div className="relative flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-gold/60 mb-0.5">FIFA</p>
-          <h1 className="font-display text-xl sm:text-2xl md:text-3xl font-bold text-fg/95 leading-none">Чемпионат мира</h1>
+          <div className="mb-3 flex items-center gap-2.5">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gold/10 text-lg ring-1 ring-gold/20">
+              🏆
+            </span>
+            <p className="text-[11px] font-mono uppercase tracking-[0.35em] text-gold/60">FIFA · 2026</p>
+          </div>
+          <h1 className="font-display text-3xl sm:text-4xl md:text-[2.75rem] font-bold text-fg/95 leading-[1.05] tracking-tight">
+            Чемпионат мира
+          </h1>
+          <p className="mt-3 text-sm sm:text-[15px] text-fg/45 max-w-md leading-relaxed">
+            Котировки и прогнозы по всем матчам турнира в реальном времени
+            {lastUpdated && (
+              <span className="text-fg/25"> · обновлено {lastUpdated.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
+            )}
+          </p>
+        </div>
+
+        {/* Live stat strip — the actual signature element, not decoration */}
+        <div className="flex shrink-0 items-stretch gap-px overflow-hidden rounded-2xl border border-fg/[0.08] bg-fg/[0.02]">
+          <div className="flex flex-col items-center justify-center gap-1 px-5 py-3.5 sm:px-6">
+            <span className="flex items-center gap-1.5 text-xl font-bold text-win font-mono tabular-nums">
+              <span className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-win" />
+              {live}
+            </span>
+            <span className="text-[10px] uppercase tracking-widest text-fg/35">Live</span>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-1 px-5 py-3.5 sm:px-6 border-x border-fg/[0.06]">
+            <span className="text-xl font-bold text-fg/85 font-mono tabular-nums">{upcoming}</span>
+            <span className="text-[10px] uppercase tracking-widest text-fg/35">Матчей</span>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-1 px-5 py-3.5 sm:px-6">
+            <span className="text-xl font-bold text-gold-deep font-mono tabular-nums">
+              {formatVolume(totalVolume) ?? '$0'}
+            </span>
+            <span className="text-[10px] uppercase tracking-widest text-fg/35">Объём</span>
+          </div>
         </div>
       </div>
-      <p className="relative text-xs sm:text-sm text-fg/45 max-w-md leading-relaxed">
-        Прогнозы и котировки чемпионата мира в реальном времени
-        {lastUpdated && (
-          <>
-            {' · '}Обновлено {lastUpdated.toLocaleDateString('ru-RU')} г.
-          </>
-        )}
-      </p>
     </div>
   );
 }
@@ -888,7 +964,6 @@ export default function WorldCupPage() {
         setComboLegs((prev) => {
           const exists = prev.find((l) => l.outcome.id === leg.outcome.id);
           if (exists) return prev.filter((l) => l.outcome.id !== leg.outcome.id);
-          // keep at most one leg per event to keep the parlay valid
           const withoutSameEvent = prev.filter((l) => l.event.id !== leg.event.id);
           return [...withoutSameEvent, leg];
         });
@@ -950,10 +1025,6 @@ export default function WorldCupPage() {
                 <div className="rounded-2xl panel p-10 sm:p-16 text-center">
                   <span className="text-5xl mb-4 block">⚽</span>
                   <p className="text-fg/50 text-lg font-display font-semibold mb-2">Матчей пока нет</p>
-                  <p className="text-fg/30 text-sm max-w-sm mx-auto">
-                    Запустите синхронизацию из панели администратора или добавьте события вручную через{' '}
-                    <code className="font-mono text-gold/60">POST /admin/events</code>
-                  </p>
                 </div>
               ) : (
                 grouped.map((g) => (
