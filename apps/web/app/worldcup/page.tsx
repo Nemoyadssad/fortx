@@ -189,7 +189,8 @@ function OddsPill({
   sublabel?: string;
 }) {
   const p = parseFloat(outcome.price);
-  const tradable = p > 0 && p < 1;
+  const isPast = event.closesAt ? new Date(event.closesAt).getTime() <= Date.now() : false;
+  const tradable = !isPast && p > 0 && p < 1;
   const pctVal = Math.round(p * 100);
 
   const colorMap = {
@@ -803,7 +804,7 @@ export default function WorldCupPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [tab, setTab] = useState<Tab>('Матчи');
-  const [filter, setFilter] = useState<FilterVal>('Все');
+  const [filter, setFilter] = useState<FilterVal>('Скоро');
   const [search, setSearch] = useState('');
 
   // Single-pick vs combo mode
@@ -815,15 +816,14 @@ export default function WorldCupPage() {
     try {
       const data = await api.events(1500);
       const all = Array.isArray(data) ? data : [];
+     const EXCLUDE_KEYWORDS = ['t20', 'cricket', 'odi', 'dota', 'csgo', 'league of legends', 'rugby', 'nascar'];
       setEvents(
-        all.filter(
-          (e) =>
-            e.category?.toLowerCase().includes('world cup') ||
-            e.title?.toLowerCase().includes('world cup') ||
-            e.title?.toLowerCase().includes('fifa') ||
-            e.title?.toLowerCase().match(/\bwc\b/) ||
-            e.category?.toLowerCase().includes('wc'),
-        ),
+        all.filter((e) => {
+          const category = e.category?.toLowerCase() ?? '';
+          const title = e.title?.toLowerCase() ?? '';
+          if (EXCLUDE_KEYWORDS.some((k) => title.includes(k) || category.includes(k))) return false;
+          return category === 'world cup'; // точное совпадение категории, не подстрока
+        }),
       );
       setLastUpdated(new Date());
     } catch {
@@ -848,7 +848,7 @@ export default function WorldCupPage() {
     return events.filter((e) => {
       if (search && !e.title?.toLowerCase().includes(search.toLowerCase())) return false;
       const closes = e.closesAt ? new Date(e.closesAt).getTime() : null;
-      if (filter === 'Все') return true;
+      if (filter === 'Все') return closes === null || closes > now;
       if (filter === 'Сегодня') {
         const todayEnd = new Date();
         todayEnd.setHours(23, 59, 59, 999);
