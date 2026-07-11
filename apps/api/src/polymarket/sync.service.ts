@@ -46,15 +46,44 @@ export class SyncService implements OnModuleInit {
     }
   }
 
-  /** Pull open events from Gamma and upsert events / markets / outcomes + latest prices. */
-async importOpen(): Promise<number> {
+  async importOpen(): Promise<number> {
     let total = 0;
+
+    // FIFA World Cup 2026 — run this FIRST so it's guaranteed to land quickly,
+    // without waiting on the much larger general passes below.
+    try {
+      const worldCupTag = await this.polymarket.findTagId('world cup');
+      if (worldCupTag) {
+        const wc = await this.importPass({ tag_id: worldCupTag, order: 'volume', ascending: false }, 1000);
+        total += wc;
+        this.logger.log(`World Cup tag pass: +${wc} markets`);
+      }
+    } catch (e) {
+      this.logger.warn(`World Cup tag pass failed: ${(e as Error).message}`);
+    }
+    try {
+      const known = ['world-cup-winner'];
+      for (const slug of known) {
+        const events = await this.polymarket.getEvents({ slug });
+        if (events.length) {
+          const wc2 = await this.importEventList(events);
+          total += wc2;
+          this.logger.log(`World Cup slug "${slug}": +${wc2} markets`);
+        } else {
+          this.logger.warn(`World Cup slug "${slug}" returned no events.`);
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`World Cup slug fetch failed: ${(e as Error).message}`);
+    }
+
     // Popular markets by 24h volume — the headline events.
     const p1 = await this.importPass({ order: 'volume24hr', ascending: false }, 2500);
     total += p1;
     this.logger.log(`Pass 1 (volume24hr): +${p1} markets`);
-    // All-time volume — big long-running markets (elections, tournaments, World Cup).
-   try {
+
+    // All-time volume — big long-running markets (elections, tournaments).
+    try {
       const p2 = await this.importPass({ order: 'volume', ascending: false }, 1500);
       total += p2;
       this.logger.log(`Pass 2 (volume): +${p2} markets`);
@@ -71,31 +100,6 @@ async importOpen(): Promise<number> {
       total += await this.importPass({ order: 'liquidity', ascending: false }, 800);
     } catch (e) {
       this.logger.warn(`liquidity pass failed: ${(e as Error).message}`);
-    }
-    // FIFA World Cup 2026 — dedicated pass so these markets always come through,
-    // regardless of how they rank against everything else by volume/liquidity.
-    try {
-      const worldCupTag = await this.polymarket.findTagId('world cup');
-      if (worldCupTag) {
-        total += await this.importPass({ tag_id: worldCupTag, order: 'volume', ascending: false }, 1000);
-      }
-    } catch (e) {
-      this.logger.warn(`World Cup tag pass failed: ${(e as Error).message}`);
-    }
-    // Guaranteed direct fetch by known slug — the tournament outright-winner
-    // market, independent of tags/sorting entirely.
-    try {
-      const known = ['world-cup-winner'];
-      for (const slug of known) {
-        const events = await this.polymarket.getEvents({ slug });
-        if (events.length) {
-          total += await this.importEventList(events);
-        } else {
-          this.logger.warn(`World Cup slug "${slug}" returned no events.`);
-        }
-      }
-    } catch (e) {
-      this.logger.warn(`World Cup slug fetch failed: ${(e as Error).message}`);
     }
     return total;
   }
