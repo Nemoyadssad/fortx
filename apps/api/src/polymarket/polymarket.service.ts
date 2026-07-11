@@ -107,7 +107,7 @@ export class PolymarketService {
   private tagCache = new Map<string, number>();
 
   /** Look up a Polymarket tag id by matching its label (e.g. "World Cup"). Cached in memory. */
-  async findTagId(query: string): Promise<number | null> {
+ async findTagId(query: string): Promise<number | null> {
     const key = query.toLowerCase();
     if (this.tagCache.has(key)) return this.tagCache.get(key)!;
     try {
@@ -116,11 +116,16 @@ export class PolymarketService {
       });
       if (!res.ok) return null;
       const tags = await res.json();
-      const match = Array.isArray(tags)
-        ? tags.find((t: any) =>
-            String(t.label ?? t.name ?? '').toLowerCase().includes(key),
-          )
-        : null;
+      if (!Array.isArray(tags)) return null;
+
+      const exact = tags.find(
+        (t: any) => String(t.label ?? t.name ?? '').toLowerCase() === key,
+      );
+      const partial = tags.find((t: any) =>
+        String(t.label ?? t.name ?? '').toLowerCase().includes(key),
+      );
+      const match = exact ?? partial;
+
       if (match?.id) {
         const id = Number(match.id);
         this.tagCache.set(key, id);

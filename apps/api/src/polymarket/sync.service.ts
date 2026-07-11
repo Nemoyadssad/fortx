@@ -51,30 +51,23 @@ export class SyncService implements OnModuleInit {
 
     // FIFA World Cup 2026 — run this FIRST so it's guaranteed to land quickly,
     // without waiting on the much larger general passes below.
+    // Sorted by soonest end date so today's/tomorrow's live matches surface first,
+    // and category is force-set to "World Cup" regardless of what Polymarket sends.
     try {
       const worldCupTag = await this.polymarket.findTagId('fifa world cup');
       if (worldCupTag) {
-        const wc = await this.importPass({ tag_id: worldCupTag, order: 'volume', ascending: false }, 1000);
+        const wc = await this.importPass(
+          { tag_id: worldCupTag, order: 'endDate', ascending: true },
+          300,
+          'World Cup',
+        );
         total += wc;
-        this.logger.log(`World Cup tag pass: +${wc} markets`);
+        this.logger.log(`World Cup tag pass (by soonest match): +${wc} markets`);
+      } else {
+        this.logger.warn('World Cup tag not found via /tags lookup.');
       }
     } catch (e) {
       this.logger.warn(`World Cup tag pass failed: ${(e as Error).message}`);
-    }
-    try {
-      const known = ['world-cup-winner'];
-      for (const slug of known) {
-        const events = await this.polymarket.getEvents({ slug });
-        if (events.length) {
-          const wc2 = await this.importEventList(events);
-          total += wc2;
-          this.logger.log(`World Cup slug "${slug}": +${wc2} markets`);
-        } else {
-          this.logger.warn(`World Cup slug "${slug}" returned no events.`);
-        }
-      }
-    } catch (e) {
-      this.logger.warn(`World Cup slug fetch failed: ${(e as Error).message}`);
     }
 
     // Popular markets by 24h volume — the headline events.
@@ -171,7 +164,11 @@ export class SyncService implements OnModuleInit {
   }
 
   /** A single ordered import pass, paginated up to maxEvents. */
-  private async importPass(extra: Record<string, any>, maxEvents: number): Promise<number> {
+private async importPass(
+    extra: Record<string, any>,
+    maxEvents: number,
+    forceCategory?: string,
+  ): Promise<number> {
     const pageSize = 100;
     let count = 0;
 
@@ -194,7 +191,7 @@ export class SyncService implements OnModuleInit {
               title: ev.title,
               description: ev.description ?? null,
               imageUrl: ev.image ?? null,
-              category: ev.category ?? null,
+              category: forceCategory ?? ev.category ?? null,
               status: ev.closed ? 'CLOSED' : 'OPEN',
               closesAt: ev.endDate ? new Date(ev.endDate) : null,
             },
@@ -205,7 +202,7 @@ export class SyncService implements OnModuleInit {
               title: ev.title,
               description: ev.description ?? null,
               imageUrl: ev.image ?? null,
-              category: ev.category ?? null,
+              category: forceCategory ?? ev.category ?? null,
               status: ev.closed ? 'CLOSED' : 'OPEN',
               closesAt: ev.endDate ? new Date(ev.endDate) : null,
             },
