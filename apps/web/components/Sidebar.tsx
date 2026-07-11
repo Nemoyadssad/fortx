@@ -10,13 +10,14 @@ import { useAuth } from '@/app/providers';
 import { useI18n } from '@/lib/i18n';
 import { ThemeToggle } from './ThemeToggle';
 
-type Item = { href?: string; label: string; icon: any; accent?: 'gold' | 'win'; event?: string; adminOnly?: boolean };
+type Item = { href?: string; label: string; icon: any; accent?: 'gold' | 'win'; event?: string; adminOnly?: boolean; emoji?: string };
 
 const GROUPS: { title: string; items: Item[] }[] = [
   {
     title: 'group.play',
     items: [
       { href: '/', label: 'nav.markets', icon: LineChart },
+      { href: '/worldcup', label: 'World Cup', icon: Trophy, accent: 'gold', emoji: '🏆' },
       { href: '/games', label: 'nav.games', icon: Gamepad2 },
       { href: '/leaderboard', label: 'nav.leaderboard', icon: Trophy, accent: 'gold' },
       { href: '/calendar', label: 'nav.calendar', icon: CalendarDays },
@@ -66,7 +67,6 @@ export function Sidebar() {
     return () => window.removeEventListener('predikt:nav', toggle);
   }, []);
 
-  // close drawer on navigation
   useEffect(() => { setOpen(false); }, [pathname]);
 
   const isActive = (href?: string) => {
@@ -76,7 +76,6 @@ export function Sidebar() {
 
   return (
     <>
-      {/* mobile overlay */}
       {open && <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)} />}
 
       <aside
@@ -104,15 +103,42 @@ export function Sidebar() {
                   {items.map((it) => {
                     const Icon = it.icon;
                     const active = isActive(it.href);
+                    const isWorldCup = it.href === '/worldcup';
                     const accent = it.accent === 'win' ? 'text-win' : it.accent === 'gold' ? 'text-gold-deep' : 'text-fg/70';
-                    const cls = `group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${active ? 'bg-gold/[0.10] text-gold-deep' : `${accent} hover:bg-fg/[0.04] hover:text-fg`}`;
+
+                    // Special World Cup item style
+                    const cls = isWorldCup
+                      ? `group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                          active
+                            ? 'bg-gold/20 text-gold-deep ring-1 ring-gold/30'
+                            : 'bg-gradient-to-r from-gold/[0.08] to-transparent text-gold-deep hover:from-gold/15 hover:to-transparent'
+                        }`
+                      : `group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
+                          active ? 'bg-gold/[0.10] text-gold-deep' : `${accent} hover:bg-fg/[0.04] hover:text-fg`
+                        }`;
+
                     const inner = (
                       <>
-                        {active && <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-gold" />}
-                        <Icon className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{t(it.label)}</span>
+                        {active && !isWorldCup && (
+                          <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-gold" />
+                        )}
+                        {active && isWorldCup && (
+                          <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-gold" />
+                        )}
+                        {isWorldCup && it.emoji ? (
+                          <span className="text-base leading-none">{it.emoji}</span>
+                        ) : (
+                          <Icon className="h-4 w-4 shrink-0" />
+                        )}
+                        <span className="truncate">{it.label}</span>
+                        {isWorldCup && (
+                          <span className="ml-auto shrink-0 rounded-full bg-win/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-win">
+                            Live
+                          </span>
+                        )}
                       </>
                     );
+
                     if (it.event) {
                       return (
                         <button key={it.label} onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent(it.event!)); }} className={cls + ' text-left'}>
