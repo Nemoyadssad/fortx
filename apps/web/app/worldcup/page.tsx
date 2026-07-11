@@ -117,7 +117,17 @@ function isSpreadMarket(m: Market) {
 function isTotalMarket(m: Market) {
   return /total|over.?\/?.?under|о\/?u|тотал|голов/i.test(m.question || '');
 }
+// Segment markets ("win the 2nd half", "1st period", overtime props) look like
+// a moneyline lexically (they contain "win"/"победит") but are NOT the
+// full-match result — betting on those instead of the match winner is exactly
+// the mixup we need to avoid.
+function isSegmentMarket(m: Market) {
+  return /\b(half|1st half|2nd half|first half|second half|period|quarter|overtime|extra time)\b|тайм|период|четверт|овертайм|доп\.?\s*время/i.test(
+    m.question || '',
+  );
+}
 function isMoneylineMarket(m: Market, mainId?: string) {
+  if (isSegmentMarket(m)) return false;
   if (m.id === mainId) return true;
   return /win|money.?line|match.?winner|1x2|победит/i.test(m.question || '');
 }
@@ -125,7 +135,9 @@ function isMoneylineMarket(m: Market, mainId?: string) {
 function pickMarkets(event: EventItem) {
   const markets = event.markets || [];
   const main = markets[0];
-  const moneyline = markets.find((m) => isMoneylineMarket(m, main?.id)) || main;
+  const moneyline =
+    markets.find((m) => isMoneylineMarket(m, main?.id)) ||
+    (main && !isSegmentMarket(main) ? main : undefined);
   const spread = markets.find((m) => m.id !== moneyline?.id && isSpreadMarket(m));
   const total = markets.find((m) => m.id !== moneyline?.id && m.id !== spread?.id && isTotalMarket(m));
   const rest = markets.filter(
@@ -241,15 +253,38 @@ function colorForIndex(i: number, len: number): 'win' | 'lose' | 'gold' {
   return 'gold';
 }
 
+// Moneyline markets often come back as a plain Yes/No question ("Will Argentina
+// win?") rather than a real two-outcome "Argentina / Switzerland" market. That
+// reads fine as a raw API payload but is useless as a bet button — "Yes" tells
+// you nothing about who you're backing. If the outcome is literally Yes/No and
+// the market question names one of the two teams, swap the label for the team
+// it actually refers to. Anything else (real 1x2 labels, prop markets) passes
+// through untouched.
+function resolveMoneylineLabel(outcome: Outcome, market: Market, teams: [string, string] | null): string {
+  if (!teams) return outcome.label;
+  if (!/^(yes|no)$/i.test(outcome.label.trim())) return outcome.label;
+
+  const q = (market.question || '').toLowerCase();
+  const [t0, t1] = teams;
+  const mentionsT0 = q.includes(t0.toLowerCase());
+  const mentionsT1 = q.includes(t1.toLowerCase());
+  const isYes = /^yes$/i.test(outcome.label.trim());
+
+  if (mentionsT0 && !mentionsT1) return isYes ? t0 : t1;
+  if (mentionsT1 && !mentionsT0) return isYes ? t1 : t0;
+  return outcome.label; // question doesn't clearly name a team — leave as-is
+}
+
 // ─── One column of a match row (Moneyline / Спред / Тотал) ───────────────────
 function MarketColumn({
-  label, market, event, onPick, isSelected,
+  label, market, event, onPick, isSelected, teams,
 }: {
   label: string;
   market?: Market;
   event: EventItem;
   onPick: (leg: Leg) => void;
   isSelected: (outcomeId: string) => boolean;
+  teams?: [string, string] | null;
 }) {
   if (!market || !market.outcomes?.length) {
     return (
@@ -273,6 +308,7 @@ function MarketColumn({
             onPick={onPick}
             color={colorForIndex(i, outcomes.length)}
             selected={isSelected(o.id)}
+            sublabel={teams ? resolveMoneylineLabel(o, market, teams) : undefined}
           />
         ))}
       </div>
@@ -374,7 +410,7 @@ function MatchRow({
            of claiming an equal third, so a moneyline-only match doesn't look mostly blank. */}
         <div className="grid grid-cols-1 sm:flex sm:flex-1 gap-3 sm:divide-x sm:divide-fg/[0.05]">
           <div className={`sm:pr-3 ${moneyline?.outcomes?.length ? 'sm:flex-[2]' : 'sm:flex-[0.6]'}`}>
-            <MarketColumn label="Moneyline" market={moneyline} event={event} onPick={onPick} isSelected={isSelected} />
+            <MarketColumn label="Moneyline" market={moneyline} event={event} onPick={onPick} isSelected={isSelected} teams={teams} />
           </div>
           <div className={`sm:px-3 ${spread?.outcomes?.length ? 'sm:flex-[2]' : 'sm:flex-[0.6]'}`}>
             <MarketColumn label="Спред" market={spread} event={event} onPick={onPick} isSelected={isSelected} />
