@@ -70,18 +70,95 @@ export class SyncService implements OnModuleInit {
     }
     // FIFA World Cup 2026 — dedicated pass so these markets always come through,
     // regardless of how they rank against everything else by volume/liquidity.
-    // Tag id is looked up by label so it doesn't depend on a hardcoded/guessed number.
     try {
       const worldCupTag = await this.polymarket.findTagId('world cup');
       if (worldCupTag) {
         total += await this.importPass({ tag_id: worldCupTag, order: 'volume', ascending: false }, 1000);
-      } else {
-        this.logger.warn('World Cup tag not found via /tags lookup — skipping dedicated pass.');
       }
     } catch (e) {
-      this.logger.warn(`World Cup pass failed: ${(e as Error).message}`);
+      this.logger.warn(`World Cup tag pass failed: ${(e as Error).message}`);
+    }
+    // Guaranteed direct fetch by known slug — the tournament outright-winner
+    // market, independent of tags/sorting entirely.
+    try {
+      const known = ['world-cup-winner'];
+      for (const slug of known) {
+        const events = await this.polymarket.getEvents({ slug });
+        if (events.length) {
+          total += await this.importEventList(events);
+        } else {
+          this.logger.warn(`World Cup slug "${slug}" returned no events.`);
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`World Cup slug fetch failed: ${(e as Error).message}`);
     }
     return total;
+  }
+
+  /** Import a specific list of already-fetched events (used for guaranteed slug lookups). */
+  private async importEventList(events: Awaited<ReturnType<PolymarketService['getEvents']>>): Promise<number> {
+    let count = 0;
+    for (const ev of events) {
+      if (!ev.markets?.length) continue;
+      try {
+        const event = await this.prisma.event.upsert({
+          where: { source_sourceId: { source: 'POLYMARKET', sourceId: ev.id } },
+          update: {
+            title: ev.title,
+            description: ev.description ?? null,
+            imageUrl: ev.image ?? null,
+            category: ev.category ?? null,
+            status: ev.closed ? 'CLOSED' : 'OPEN',
+            closesAt: ev.endDate ? new Date(ev.endDate) : null,
+          },
+          create: {
+            source: 'POLYMARKET',
+            sourceId: ev.id,
+            slug: ev.slug,
+            title: ev.title,
+            description: ev.description ?? null,
+            imageUrl: ev.image ?? null,
+            category: ev.category ?? null,
+            status: ev.closed ? 'CLOSED' : 'OPEN',
+            closesAt: ev.endDate ? new Date(ev.endDate) : null,
+          },
+        });
+
+        for (const raw of ev.markets) {
+          const m = this.polymarket.parseMarket(raw);
+          if (m.outcomesParsed.length < 2) continue;
+
+          const market = await this.prisma.market.upsert({
+            where: { eventId_sourceId: { eventId: event.id, sourceId: m.id } },
+            update: { question: m.question, status: m.closed ? 'CLOSED' : 'OPEN' },
+            create: {
+              eventId: event.id,
+              sourceId: m.id,
+              question: m.question,
+              status: m.closed ? 'CLOSED' : 'OPEN',
+            },
+          });
+
+          for (let i = 0; i < m.outcomesParsed.length; i++) {
+            const label = m.outcomesParsed[i];
+            let price = new Prisma.Decimal(m.pricesParsed[i] || '0');
+            if (price.lt(0)) price = new Prisma.Decimal(0);
+            if (price.gt(1)) price = new Prisma.Decimal(1);
+
+            await this.prisma.outcome.upsert({
+              where: { marketId_label: { marketId: market.id, label } },
+              update: { price, sourceTokenId: m.tokenIdsParsed[i] ?? null },
+              create: { marketId: market.id, label, price, sourceTokenId: m.tokenIdsParsed[i] ?? null },
+            });
+          }
+          count++;
+        }
+      } catch (err) {
+        this.logger.error(`Failed to import event ${ev.id}: ${(err as Error).message}`);
+      }
+    }
+    return count;
   }
 
   /** A single ordered import pass, paginated up to maxEvents. */
