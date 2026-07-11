@@ -32,7 +32,8 @@ async function req(path: string, options: RequestInit = {}): Promise<any> {
 }
 
 export const api = {
-  events: (take = 24) => req(`/events?take=${take}`),
+  events: (take = 24, opts?: { category?: string }) =>
+    req(`/events?take=${take}${opts?.category ? `&category=${encodeURIComponent(opts.category)}` : ''}`),
   event: (id: string) => req(`/events/${id}`),
   register: (
     email: string,

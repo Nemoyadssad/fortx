@@ -890,7 +890,7 @@ export default function WorldCupPage() {
 
   const load = useCallback(async () => {
     try {
-      const data = await api.events(1500);
+      const data = await api.events(1500, { category: 'World Cup' });
       const all = Array.isArray(data) ? data : [];
      const EXCLUDE_KEYWORDS = ['t20', 'cricket', 'odi', 'dota', 'csgo', 'league of legends', 'rugby', 'nascar'];
       setEvents(
