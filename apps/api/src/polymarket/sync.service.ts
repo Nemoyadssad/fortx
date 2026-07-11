@@ -47,13 +47,17 @@ export class SyncService implements OnModuleInit {
   }
 
   /** Pull open events from Gamma and upsert events / markets / outcomes + latest prices. */
-  async importOpen(): Promise<number> {
+async importOpen(): Promise<number> {
     let total = 0;
     // Popular markets by 24h volume — the headline events.
-    total += await this.importPass({ order: 'volume24hr', ascending: false }, 2500);
+    const p1 = await this.importPass({ order: 'volume24hr', ascending: false }, 2500);
+    total += p1;
+    this.logger.log(`Pass 1 (volume24hr): +${p1} markets`);
     // All-time volume — big long-running markets (elections, tournaments, World Cup).
-    try {
-      total += await this.importPass({ order: 'volume', ascending: false }, 1500);
+   try {
+      const p2 = await this.importPass({ order: 'volume', ascending: false }, 1500);
+      total += p2;
+      this.logger.log(`Pass 2 (volume): +${p2} markets`);
     } catch (e) {
       this.logger.warn(`volume pass failed: ${(e as Error).message}`);
     }
