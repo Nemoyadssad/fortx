@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Rocket } from 'lucide-react';
+import CrashScene from '@/components/CrashScene';
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import { fmtMoney } from '@/lib/format';
@@ -161,7 +161,6 @@ export default function CrashPage() {
 
   const display = result ? (result.won ? result.multiplier ?? liveMult : result.crashPoint) : liveMult;
   const color = result ? (result.won ? 'text-win' : 'text-lose') : 'text-fg';
-  const trail = Math.min(100, (Math.log2(Math.max(1, display)) / Math.log2(32)) * 100);
 
   function chipColor(cp: number) {
     if (cp < 1.3) return 'text-lose';
@@ -185,20 +184,19 @@ export default function CrashPage() {
         <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
           {/* graph */}
           <div className="relative flex h-72 items-end justify-center overflow-hidden rounded-2xl border hairline bg-panel2">
-            <div
-              className="absolute bottom-0 left-1/2 w-24 -translate-x-1/2 rounded-t-full bg-gradient-to-t from-gold/0 to-gold/20 transition-all duration-100"
-              style={{ height: `${trail}%` }}
+            <CrashScene
+              active={active}
+              crashed={!!result && !result.won}
+              cashedOut={!!result && result.won}
+              multiplier={display}
             />
-            <div className="relative mb-10 text-center">
-              <Rocket
-                className={`mx-auto mb-3 h-7 w-7 ${result && !result.won ? 'text-lose' : 'text-gold-deep'}`}
-              />
-              <p className={`font-display text-6xl font-bold tabular-nums ${color}`}>
+            <div className="relative z-10 mb-10 text-center">
+              <p className={`font-display text-6xl font-bold tabular-nums drop-shadow-[0_0_20px_rgba(0,0,0,0.6)] ${color}`}>
                 {display.toFixed(2)}
                 <span className="text-3xl">x</span>
               </p>
               {result && (
-                <p className="mt-2 text-sm text-fg/50">
+                <p className="mt-2 text-sm font-semibold text-fg/60 drop-shadow-[0_0_10px_rgba(0,0,0,0.8)]">
                   {result.won
                     ? `Cashed out · ${fmtMoney(result.payout ?? 0)}`
                     : `Crashed @ x${result.crashPoint.toFixed(2)}`}
