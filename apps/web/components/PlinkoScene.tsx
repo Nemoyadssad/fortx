@@ -29,16 +29,18 @@ type PlinkoSceneProps = {
   drops: PlinkoDrop[];
   particleColor: (m: number) => string; // 'r,g,b'
   onLand?: (id: number, multiplier: number) => void;
+  segmentMs?: number; // ms per row — shorten this when dropping many balls at once
 };
 
-const SEGMENT_MS = 150;
+const DEFAULT_SEGMENT_MS = 150;
 const GLOW_RADIUS = 16; // px — how close the ball needs to be to light up a peg
 
 function easeInOutSine(t: number) {
   return -(Math.cos(Math.PI * t) - 1) / 2;
 }
 
-export default function PlinkoScene({ rows, pegs, drops, particleColor, onLand }: PlinkoSceneProps) {
+export default function PlinkoScene({ rows, pegs, drops, particleColor, onLand, segmentMs }: PlinkoSceneProps) {
+  const SEGMENT_MS = segmentMs ?? DEFAULT_SEGMENT_MS;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const particlesRef = useRef<Particle[]>([]);

@@ -40,6 +40,13 @@ const bucketColor = (m: number) =>
 const particleColor = (m: number) =>
   m >= 3 ? '245,197,66' : m >= 1 ? '46,213,115' : '255,77,109';
 
+function staggerFor(n: number) {
+  if (n <= 1) return 0;
+  if (n <= 5) return 90;
+  if (n <= 10) return 45;
+  return 20;
+}
+
 type LandedBall = { id: number; bucket: number; multiplier: number; payout: number };
 
 export default function PlinkoPage() {
@@ -79,14 +86,18 @@ export default function PlinkoPage() {
     pendingRef.current = new Map();
     setExpectedCount(ballCount);
 
-    const newDrops: PlinkoDrop[] = [];
+    // fire every ball's bet in parallel — sequential awaits were the real
+    // source of the long wait (N round-trips back to back instead of 1)
+    const stagger = staggerFor(ballCount);
     try {
-      for (let i = 0; i < ballCount; i++) {
-        const r = await api.games.plinkoPlay(stake, rows, risk);
+      const responses = await Promise.all(
+        Array.from({ length: ballCount }, () => api.games.plinkoPlay(stake, rows, risk)),
+      );
+      const newDrops: PlinkoDrop[] = responses.map((r, i) => {
         const id = ++idCounter.current;
         pendingRef.current.set(id, { id, bucket: r.bucket, multiplier: r.multiplier, payout: r.payout });
-        newDrops.push({ id, path: r.path, multiplier: r.multiplier, startDelay: i * DROP_STAGGER_MS });
-      }
+        return { id, path: r.path, multiplier: r.multiplier, startDelay: i * stagger };
+      });
       await refreshBalance();
       setDrops(newDrops);
     } catch (e: any) {
@@ -125,6 +136,7 @@ export default function PlinkoPage() {
           drops={drops}
           particleColor={particleColor}
           onLand={onBallLand}
+          segmentMs={ballCount > 10 ? 90 : ballCount > 5 ? 115 : 150}
         />
         {/* buckets */}
         <div className="absolute inset-x-2 bottom-2 flex gap-0.5">
