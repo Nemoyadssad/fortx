@@ -26,13 +26,15 @@ export default function ReferralsPage() {
   const { t } = useI18n();
   const { email, refreshBalance } = useAuth();
   const [data, setData] = useState<any | null>(null);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [copied, setCopied] = useState(false);
   const [claiming, setClaiming] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(() => {
     if (!email) return;
     api.referrals.me().then(setData).catch(() => {});
+    api.referrals.withdrawals().then(setWithdrawals).catch(() => {});
   }, [email]);
 
   useEffect(() => { load(); }, [load]);
@@ -58,12 +60,14 @@ export default function ReferralsPage() {
     setClaiming(true);
     setMsg(null);
     try {
-      const r = await api.referrals.claim();
-      await refreshBalance();
-      load();
-      setMsg(`Claimed ${fmtMoney(r.claimed)}!`);
+      const r = await api.referrals.claim(); // теперь это заявка (PENDING), не мгновенное зачисление
+      load(); // подтянуть новый claimable (уйдёт в 0, сумма зарезервирована) и список заявок
+      setMsg({
+        ok: true,
+        text: `Заявка на вывод ${fmtMoney(r.amount)} создана. Деньги поступят на баланс после одобрения администратором.`,
+      });
     } catch (e: any) {
-      setMsg(e?.message || 'Nothing to claim yet.');
+      setMsg({ ok: false, text: e?.message || 'Пока нечего выводить.' });
     } finally {
       setClaiming(false);
     }
@@ -182,11 +186,16 @@ export default function ReferralsPage() {
             disabled={claiming || !data || data.claimable <= 0}
             className="mt-2 w-full rounded-lg bg-gradient-to-b from-win to-[#1ea65a] py-2 text-sm font-bold text-black transition hover:brightness-105 disabled:opacity-40"
           >
-            {claiming ? '…' : t('common.claimToBalance')}
+            {claiming ? '…' : 'Запросить вывод'}
           </button>
+          <p className="mt-1 text-[10px] text-fg/40">Зачисление — после одобрения администратором</p>
         </div>
       </div>
-      {msg && <p className="mt-2 text-center text-sm font-semibold text-win">{msg}</p>}
+      {msg && (
+        <p className={`mt-2 text-center text-sm font-semibold ${msg.ok ? 'text-win' : 'text-lose'}`}>
+          {msg.text}
+        </p>
+      )}
 
       {/* tier ladder */}
       <div className="mt-10 flex items-center gap-2">
@@ -263,6 +272,36 @@ export default function ReferralsPage() {
                   </span>
                   <span className="text-right font-mono text-lose/90">{fmtMoney(f.lost)}</span>
                   <span className="text-right font-mono font-bold text-gold-deep">+{fmtMoney(f.earned)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+       </>
+      )}
+
+      {withdrawals.length > 0 && (
+        <>
+          <h2 className="mt-10 font-display text-xl font-bold">Заявки на вывод</h2>
+          <div className="mt-4 overflow-hidden rounded-2xl panel">
+            <div className="grid grid-cols-[1fr_1fr_1fr] border-b hairline px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-fg/40">
+              <span>Сумма</span>
+              <span>Дата</span>
+              <span className="text-right">Статус</span>
+            </div>
+            <div className="divide-y divide-fg/[0.05]">
+              {withdrawals.map((w) => (
+                <div key={w.id} className="grid grid-cols-[1fr_1fr_1fr] items-center px-5 py-3 text-sm">
+                  <span className="font-mono font-bold text-gold-deep">{fmtMoney(w.amount)}</span>
+                  <span className="text-fg/50">{new Date(w.createdAt).toLocaleString()}</span>
+                  <span
+                    className={`text-right text-xs font-semibold uppercase ${
+                      w.status === 'APPROVED' ? 'text-win' : w.status === 'REJECTED' ? 'text-lose' : 'text-gold-deep'
+                    }`}
+                  >
+                    {w.status === 'PENDING' && 'Ожидает'}
+                    {w.status === 'APPROVED' && 'Одобрено'}
+                    {w.status === 'REJECTED' && 'Отклонено'}
+                  </span>
                 </div>
               ))}
             </div>

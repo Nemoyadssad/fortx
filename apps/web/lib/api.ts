@@ -140,6 +140,7 @@ export const api = {
   referrals: {
     me: () => req('/referrals/me'),
     claim: () => req('/referrals/claim', { method: 'POST' }),
+    withdrawals: () => req('/referrals/withdrawals'),
   },
 
  payments: {
