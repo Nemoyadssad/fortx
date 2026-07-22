@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import { fmtMoney } from '@/lib/format';
+import PlinkoScene from '@/components/PlinkoScene';
 
 const CHIPS = [0.5, 1, 5, 10];
 const ROWS_OPTS = [8, 12, 16];
@@ -34,62 +35,54 @@ function plinkoMultipliers(rows: number, risk: 'low' | 'medium' | 'high'): numbe
 const bucketColor = (m: number) =>
   m >= 3 ? 'bg-gold text-black' : m >= 1 ? 'bg-win/20 text-win' : 'bg-lose/15 text-lose';
 
+const particleColor = (m: number) =>
+  m >= 3 ? '245,197,66' : m >= 1 ? '46,213,115' : '255,77,109';
+
 export default function PlinkoPage() {
   const { email, refreshBalance } = useAuth();
   const [stake, setStake] = useState(1);
   const [rows, setRows] = useState(12);
   const [risk, setRisk] = useState<'low' | 'medium' | 'high'>('medium');
   const [dropping, setDropping] = useState(false);
-  const [ball, setBall] = useState<{ x: number; top: number } | null>(null);
+  const [path, setPath] = useState<string | null>(null);
+  const [dropToken, setDropToken] = useState(0);
   const [landed, setLanded] = useState<{ bucket: number; multiplier: number; payout: number } | null>(null);
   const [recent, setRecent] = useState<any[]>([]);
-  const timer = useRef<any>(null);
+  const pendingRef = useRef<{ bucket: number; multiplier: number; payout: number } | null>(null);
 
   const mults = useMemo(() => plinkoMultipliers(rows, risk), [rows, risk]);
 
   const load = () => api.games.plinkoRecent().then(setRecent).catch(() => {});
-  useEffect(() => { load(); return () => clearInterval(timer.current); }, []);
+  useEffect(() => { load(); }, []);
 
-  function ballPos(path: string, r: number) {
-    let rights = 0;
-    for (let i = 0; i < r; i++) if (path[i] === 'R') rights++;
-    const disp = 2 * rights - r;
-    return { x: 50 + (disp / rows) * 42, top: (r / rows) * 86 + 4 };
+  // peg dots (percentages, same layout as before)
+  const pegs: { x: number; top: number }[] = [];
+  for (let r = 1; r < rows; r++) {
+    for (let p = 0; p <= r; p++) {
+      pegs.push({ x: 50 + ((2 * p - r) / rows) * 42, top: (r / rows) * 86 + 4 });
+    }
   }
 
   async function drop() {
     if (!email) { window.dispatchEvent(new CustomEvent('predikt:auth')); return; }
     setDropping(true);
     setLanded(null);
+    setPath(null);
     try {
       const r = await api.games.plinkoPlay(stake, rows, risk);
       await refreshBalance();
-      // animate the ball down the pegs
-      let step = 0;
-      setBall(ballPos(r.path, 0));
-      clearInterval(timer.current);
-      timer.current = setInterval(() => {
-        step++;
-        setBall(ballPos(r.path, step));
-        if (step >= rows) {
-          clearInterval(timer.current);
-          setLanded({ bucket: r.bucket, multiplier: r.multiplier, payout: r.payout });
-          setDropping(false);
-          load();
-        }
-      }, 75);
+      pendingRef.current = { bucket: r.bucket, multiplier: r.multiplier, payout: r.payout };
+      setPath(r.path);
+      setDropToken((t) => t + 1);
     } catch (e: any) {
       setDropping(false);
-      setLanded(null);
     }
   }
 
-  // peg dots
-  const pegs: { x: number; top: number }[] = [];
-  for (let r = 1; r < rows; r++) {
-    for (let p = 0; p <= r; p++) {
-      pegs.push({ x: 50 + ((2 * p - r) / rows) * 42, top: (r / rows) * 86 + 4 });
-    }
+  function onLand() {
+    setLanded(pendingRef.current);
+    setDropping(false);
+    load();
   }
 
   return (
@@ -99,15 +92,15 @@ export default function PlinkoPage() {
 
       {/* board */}
       <div className="relative mt-6 h-[340px] overflow-hidden rounded-2xl panel">
-        {pegs.map((p, i) => (
-          <span key={i} className="absolute h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-fg/25" style={{ left: `${p.x}%`, top: `${p.top}%` }} />
-        ))}
-        {ball && (
-          <span
-            className="absolute z-10 h-3 w-3 -translate-x-1/2 rounded-full bg-gold shadow-gold transition-all duration-[70ms] ease-linear"
-            style={{ left: `${ball.x}%`, top: `${ball.top}%` }}
-          />
-        )}
+        <PlinkoScene
+          rows={rows}
+          pegs={pegs}
+          path={path}
+          dropToken={dropToken}
+          particleColor={particleColor}
+          multiplier={landed?.multiplier ?? pendingRef.current?.multiplier ?? null}
+          onLand={onLand}
+        />
         {/* buckets */}
         <div className="absolute inset-x-2 bottom-2 flex gap-0.5">
           {mults.map((m, i) => (
