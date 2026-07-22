@@ -25,7 +25,6 @@ const GROUPS: { title: string; items: Item[] }[] = [
     title: 'Play',
     items: [
       { href: '/', label: 'Markets', icon: LineChart },
-      { href: '/worldcup', label: 'World Cup', icon: Trophy, accent: 'gold', emoji: '🏆', badge: 'Live' },
       { href: '/games', label: 'Games', icon: Gamepad2 },
       { href: '/leaderboard', label: 'Leaderboard', icon: Trophy, accent: 'gold' },
       { href: '/calendar', label: 'Calendar', icon: CalendarDays },
