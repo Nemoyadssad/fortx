@@ -5,9 +5,10 @@ import { ReferralsModule } from '../referrals/referrals.module';
 import { AdminService } from './admin.service';
 import { AdminController } from './admin.controller';
 import { PromoModule } from '../promo/promo.module';
+import { SettingsModule } from '../settings/settings.module';   // ← добавить импорт
 
 @Module({
-  imports: [PromoModule, WalletModule, EngageModule, ReferralsModule],
+  imports: [PromoModule, WalletModule, EngageModule, ReferralsModule, SettingsModule],   // ← добавить в массив
   providers: [AdminService],
   controllers: [AdminController],
 })
