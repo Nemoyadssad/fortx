@@ -172,3 +172,18 @@ body {
 
 @keyframes refShimmer { to { background-position: 200% center; } }
 .shimmer-gold { background-size: 200% auto; animation: refShimmer 3.2s linear infinite; }
+
+@keyframes coinLand {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.14); }
+  60%  { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+
+@keyframes coinShake {
+  0%, 100% { transform: translate(0, 0); }
+  20%      { transform: translate(-3px, 2px); }
+  40%      { transform: translate(3px, -2px); }
+  60%      { transform: translate(-2px, -2px); }
+  80%      { transform: translate(2px, 2px); }
+}
