@@ -159,7 +159,7 @@ export default function Home() {
             </div>
           ) : shown.length === 0 ? (
             <div className="rounded-2xl panel p-10 text-center text-fg/50">
-              No markets here yet. Trigger a sync (POST /admin/sync) and they&rsquo;ll appear.
+              No markets here yet.
             </div>
           ) : (
             <>

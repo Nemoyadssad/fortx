@@ -10,8 +10,14 @@ export class ReferralsController {
     return this.referrals.myStatus(req.user.id);
   }
 
+  @Get('withdrawals')
+  myWithdrawals(@Req() req: any) {
+    return this.referrals.myWithdrawals(req.user.id);
+  }
+
+  /** Раньше зачисляло мгновенно — теперь создаёт заявку на модерацию. */
   @Post('claim')
-  claim(@Req() req: any) {
-    return this.referrals.claim(req.user.id);
+  requestWithdrawal(@Req() req: any) {
+    return this.referrals.requestWithdrawal(req.user.id);
   }
 }

@@ -69,3 +69,18 @@ export class ResetPasswordDto {
   @MinLength(8)
   password?: string;
 }
+
+export class ReferralAdjustDto {
+  @IsNumber()
+  amount!: number; // можно отрицательное число — списание
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class ReferralWithdrawalRejectDto {
+  @IsOptional()
+  @IsString()
+  note?: string;
+}

@@ -53,6 +53,8 @@ model User {
 jackpotWins    JackpotRound[] @relation("JackpotWins")
 jackpotEntries JackpotEntry[] @relation("JackpotEntries")
 payments       Payment[]
+referralWithdrawals         ReferralWithdrawal[] @relation("ReferralWithdrawals")
+  referralWithdrawalsReviewed ReferralWithdrawal[] @relation("ReferralWithdrawalReviewer")
 notifications Notification[]
 
   referralCode String? @unique
@@ -488,4 +490,29 @@ model Payment {
 
   @@index([userId])
   @@index([plategaId])
+}
+
+// ---------------------------------------------------------------------------
+// Referral withdrawal requests — money is credited only after admin approval
+// ---------------------------------------------------------------------------
+enum ReferralWithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ReferralWithdrawal {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation("ReferralWithdrawals", fields: [userId], references: [id])
+  amount       Decimal  @db.Decimal(20, 8)
+  status       ReferralWithdrawalStatus @default(PENDING)
+  reviewedById String?
+  reviewedBy   User?    @relation("ReferralWithdrawalReviewer", fields: [reviewedById], references: [id])
+  reviewNote   String?
+  createdAt    DateTime @default(now())
+  reviewedAt   DateTime?
+
+  @@index([userId])
+  @@index([status])
 }

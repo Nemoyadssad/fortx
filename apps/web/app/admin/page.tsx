@@ -6,7 +6,7 @@ import { TOPIC_NAMES } from '@/lib/topics';
 import { useAuth } from '@/app/providers';
 import { fmtMoney, pct } from '@/lib/format';
 
-type Tab = 'dashboard' | 'users' | 'markets' | 'create' | 'support' | 'promos' | 'control' | 'broadcast';
+type Tab = 'dashboard' | 'users' | 'referrals' | 'markets' | 'create' | 'support' | 'promos' | 'control' | 'broadcast';
 
 const ROLES = ['USER', 'SUPPORT', 'ADMIN', 'SUPERADMIN'];
 const STATUSES = ['ACTIVE', 'SUSPENDED', 'BANNED'];
@@ -46,6 +46,7 @@ export default function AdminPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'users', label: 'Users' },
+    { id: 'referrals', label: 'Referrals' },
     { id: 'markets', label: 'Markets & results' },
     { id: 'create', label: 'New event' },
     { id: 'support', label: 'Support' },
@@ -89,6 +90,7 @@ export default function AdminPage() {
       <div className="mt-6">
         {tab === 'dashboard' && <Dashboard />}
         {tab === 'users' && <Users />}
+        {tab === 'referrals' && <Referrals />}
         {tab === 'markets' && <Markets />}
         {tab === 'create' && <CreateEvent />}
         {tab === 'support' && <Support />}
@@ -293,6 +295,262 @@ function Users() {
         </table>
       </div>
       {reportId && <PlayerReportModal id={reportId} onClose={() => setReportId(null)} />}
+    </div>
+  );
+}
+
+const REF_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'];
+
+function Referrals() {
+  const [status, setStatus] = useState('PENDING');
+  const [list, setList] = useState<any[]>([]);
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api.admin.referralWithdrawals(status).then(setList).catch(() => {});
+  }, [status]);
+  useEffect(() => load(), [load]);
+
+  async function approve(id: string) {
+    setBusyId(id);
+    try {
+      await api.admin.approveReferralWithdrawal(id);
+      setMsg('Заявка одобрена, деньги зачислены.');
+      load();
+    } catch (e: any) {
+      setMsg(e?.message || 'Не удалось одобрить заявку');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function reject(id: string) {
+    const note = prompt('Причина отклонения (необязательно):') || undefined;
+    setBusyId(id);
+    try {
+      await api.admin.rejectReferralWithdrawal(id, note);
+      setMsg('Заявка отклонена.');
+      load();
+    } catch (e: any) {
+      setMsg(e?.message || 'Не удалось отклонить заявку');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        {REF_STATUSES.map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatus(s)}
+            className={`rounded-full border px-3 py-1 text-xs transition ${
+              status === s
+                ? 'border-gold/50 bg-gold/10 text-gold-deep'
+                : 'border-fg/[0.06] text-fg/55 hover:text-fg'
+            }`}
+          >
+            {s}
+          </button>
+        ))}
+        {msg && <span className="ml-2 text-sm text-gold-deep">{msg}</span>}
+      </div>
+
+      <div className="rounded-2xl panel">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left font-mono text-[10px] uppercase tracking-widest text-fg/40">
+                <th className="px-4 py-3">User</th>
+                <th className="px-4 py-3">Referrals</th>
+                <th className="px-4 py-3">Amount</th>
+                <th className="px-4 py-3">Requested</th>
+                <th className="px-4 py-3">Reviewed by</th>
+                <th className="px-4 py-3">Profile</th>
+                {status === 'PENDING' && <th className="px-4 py-3">Action</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((w) => (
+                <tr key={w.id} className="border-t hairline">
+                  <td className="px-4 py-3 text-fg/85">
+                    {w.user.displayName || w.user.email || w.user.telegramUsername || w.user.id.slice(0, 8)}
+                  </td>
+                  <td className="px-4 py-3 text-fg/60">{w.user._count?.referrals ?? 0}</td>
+                  <td className="px-4 py-3 font-mono text-gold-deep">{fmtMoney(w.amount)}</td>
+                  <td className="px-4 py-3 text-fg/45">{new Date(w.createdAt).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-fg/45">
+                    {w.reviewedBy ? (w.reviewedBy.displayName || w.reviewedBy.email) : '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => setProfileId(w.user.id)}
+                      className="rounded-lg border hairline px-3 py-1 text-fg/70 transition hover:border-gold/40 hover:text-gold-deep"
+                    >
+                      View
+                    </button>
+                  </td>
+                  {status === 'PENDING' && (
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => approve(w.id)}
+                          disabled={busyId === w.id}
+                          className="rounded-lg bg-gradient-to-b from-gold to-gold-soft px-3 py-1 text-xs font-bold text-black shadow-gold transition hover:brightness-105 disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => reject(w.id)}
+                          disabled={busyId === w.id}
+                          className="rounded-lg border border-lose/40 px-3 py-1 text-xs text-lose transition hover:bg-lose/10 disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {list.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-fg/40">
+                    Нет заявок со статусом {status}.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {profileId && <ReferralProfileModal id={profileId} onClose={() => setProfileId(null)} />}
+    </div>
+  );
+}
+
+function ReferralProfileModal({ id, onClose }: { id: string; onClose: () => void }) {
+  const [r, setR] = useState<any | null>(null);
+  const [err, setErr] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api.admin.userReferralProfile(id).then(setR).catch(() => setErr(true));
+  }, [id]);
+  useEffect(() => load(), [load]);
+
+  async function apply() {
+    const n = Number(amount);
+    if (!n) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api.admin.adjustReferralBalance(id, n, note || undefined);
+      setAmount('');
+      setNote('');
+      setMsg(`Скорректировано на ${n > 0 ? '+' : ''}${n}`);
+      load();
+    } catch (e: any) {
+      setMsg(e?.message || 'Не удалось скорректировать баланс');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="my-8 w-full max-w-2xl rounded-2xl panel p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        {!r ? (
+          <p className="py-10 text-center text-sm text-fg/40">{err ? 'Не удалось загрузить профиль.' : 'Загрузка…'}</p>
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-display text-xl font-bold">Referral profile</h2>
+                <p className="mt-0.5 text-xs text-fg/45">Code: {r.code}</p>
+              </div>
+              <button onClick={onClose} className="rounded-lg border hairline px-3 py-1.5 text-sm text-fg/60 hover:text-fg">Close</button>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Mini label="Referrals" node={<span>{r.referrals}</span>} />
+              <Mini label="Tier" node={<span>{r.ratePct}%</span>} />
+              <Mini label="Earned total" node={<span className="text-gold-deep">{fmtMoney(r.earned)}</span>} />
+              <Mini label="Claimable now" node={<span>{fmtMoney(r.claimable)}</span>} />
+              <Mini label="Already paid" node={<span>{fmtMoney(r.claimed)}</span>} />
+              <Mini label="Pending requests" node={<span>{fmtMoney(r.pending)}</span>} />
+              <Mini label="Admin adjustments" node={<span>{fmtMoney(r.adminAdjustments)}</span>} />
+              <Mini label="Total wagered by refs" node={<span>{fmtMoney(r.totalWagered)}</span>} />
+            </div>
+
+            <h3 className="mt-6 font-display text-sm font-semibold text-fg/80">Manual balance adjustment</h3>
+            <p className="mt-1 text-xs text-fg/45">Положительное число — начислить, отрицательное — списать. Записывается в audit log.</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                type="number"
+                placeholder="+/- amount"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-32 rounded-lg border hairline bg-fg/[0.03] px-3 py-2 font-mono text-sm outline-none focus:border-gold/50"
+              />
+              <input
+                type="text"
+                placeholder="Причина (необязательно)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="min-w-[200px] flex-1 rounded-lg border hairline bg-fg/[0.03] px-3 py-2 text-sm outline-none focus:border-gold/50"
+              />
+              <button
+                onClick={apply}
+                disabled={busy || !amount}
+                className="rounded-lg border border-gold/30 px-4 py-2 text-sm text-gold-deep transition hover:bg-gold/10 disabled:opacity-50"
+              >
+                Apply
+              </button>
+            </div>
+            {msg && <p className="mt-2 text-sm text-gold-deep">{msg}</p>}
+
+            <h3 className="mt-6 font-display text-sm font-semibold text-fg/80">Withdrawal history</h3>
+            <div className="mt-2 overflow-hidden rounded-xl border hairline">
+              {r.withdrawals.length === 0 ? (
+                <p className="px-3 py-4 text-sm text-fg/40">Заявок ещё не было.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <tbody>
+                    {r.withdrawals.map((w: any) => (
+                      <tr key={w.id} className="border-t hairline first:border-t-0">
+                        <td className="px-3 py-2 font-mono">{fmtMoney(w.amount)}</td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`rounded-md px-2 py-0.5 text-[11px] font-mono ${
+                              w.status === 'APPROVED'
+                                ? 'bg-win/15 text-win'
+                                : w.status === 'REJECTED'
+                                ? 'bg-lose/15 text-lose'
+                                : 'bg-gold/15 text-gold-deep'
+                            }`}
+                          >
+                            {w.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-[11px] text-fg/40">
+                          {new Date(w.createdAt).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

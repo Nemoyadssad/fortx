@@ -4,12 +4,14 @@ import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { ReferralsService } from '../referrals/referrals.service';
 
 @Injectable()
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly wallet: WalletService,
+    private readonly referrals: ReferralsService,
   ) {}
 
   async stats() {
@@ -209,6 +211,26 @@ export class AdminService {
     return this.wallet.adminAdjust(id, amount, actorId, note);
   }
 
+  referralWithdrawals(status?: string, take = 50) {
+    return this.referrals.listWithdrawals(status as any, take);
+  }
+
+  approveReferralWithdrawal(id: string, actorId: string) {
+    return this.referrals.approveWithdrawal(id, actorId);
+  }
+
+  rejectReferralWithdrawal(id: string, actorId: string, note?: string) {
+    return this.referrals.rejectWithdrawal(id, actorId, note);
+  }
+
+  adjustReferralBalance(id: string, amount: number, note: string | undefined, actorId: string) {
+    return this.referrals.adminAdjustEarned(id, amount, actorId, note);
+  }
+
+  userReferralProfile(id: string) {
+    return this.referrals.adminUserReferralProfile(id);
+  }
+  
   markets(status?: string, take = 60) {
     return this.prisma.market.findMany({
       where: status ? { status: status as any } : {},

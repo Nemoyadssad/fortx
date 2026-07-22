@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { BetStatus } from '@prisma/client';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BetStatus, ReferralWithdrawalStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { SettingsService } from '../settings/settings.service';
@@ -69,7 +69,6 @@ export class ReferralsService {
     return out;
   }
 
-  /** Net loss per referee = staked − returned (games + settled predictions). */
   private async lossByUsers(ids: string[]): Promise<Record<string, number>> {
     if (ids.length === 0) return {};
     const [g, betStake, betWon, betRefund] = await Promise.all([
@@ -87,9 +86,28 @@ export class ReferralsService {
     return loss;
   }
 
+  /** Уже реально выплачено (одобренные заявки на вывод). */
   private async claimedTotal(userId: string): Promise<number> {
+    const agg = await this.prisma.referralWithdrawal.aggregate({
+      where: { userId, status: ReferralWithdrawalStatus.APPROVED },
+      _sum: { amount: true },
+    });
+    return Number(agg._sum.amount ?? 0);
+  }
+
+  /** Сумма в заявках, которые ещё на рассмотрении — резервируется, чтобы нельзя было вывести дважды. */
+  private async pendingTotal(userId: string): Promise<number> {
+    const agg = await this.prisma.referralWithdrawal.aggregate({
+      where: { userId, status: ReferralWithdrawalStatus.PENDING },
+      _sum: { amount: true },
+    });
+    return Number(agg._sum.amount ?? 0);
+  }
+
+  /** Ручные корректировки админом (может быть отрицательным числом — списание). */
+  private async adminAdjustmentsTotal(userId: string): Promise<number> {
     const logs = await this.prisma.auditLog.findMany({
-      where: { actorId: userId, action: 'REFERRAL_CLAIM' },
+      where: { targetId: userId, targetType: 'User', action: 'REFERRAL_ADMIN_ADJUST' },
       select: { metadata: true },
     });
     return logs.reduce((sum, l) => sum + Number((l.metadata as any)?.amount ?? 0), 0);
@@ -108,14 +126,14 @@ export class ReferralsService {
 
     let totalWagered = 0;
     let totalLost = 0;
-    let earned = 0;
+    let earnedFromReferrals = 0;
     const friends = refs.map((r) => {
       const w = wmap[r.id] ?? 0;
       const lost = Math.max(0, lmap[r.id] ?? 0);
       const e = Math.round(lost * rate * 100) / 100;
       totalWagered += w;
       totalLost += lost;
-      earned += e;
+      earnedFromReferrals += e;
       return {
         email: maskEmail(r.email),
         wagered: Math.round(w),
@@ -124,10 +142,15 @@ export class ReferralsService {
         joinedAt: r.createdAt,
       };
     });
-    earned = Math.round(earned * 100) / 100;
 
-    const claimed = await this.claimedTotal(userId);
-    const claimable = Math.max(0, Math.round((earned - claimed) * 100) / 100);
+    const [claimed, pending, adminAdj] = await Promise.all([
+      this.claimedTotal(userId),
+      this.pendingTotal(userId),
+      this.adminAdjustmentsTotal(userId),
+    ]);
+
+    const earned = Math.round((earnedFromReferrals + adminAdj) * 100) / 100;
+    const claimable = Math.max(0, Math.round((earned - claimed - pending) * 100) / 100);
     const nextTier = TIERS.find((t) => refs.length < t.from) ?? null;
 
     return {
@@ -139,6 +162,8 @@ export class ReferralsService {
       ratePct: Math.round(rate * 100),
       earned,
       claimed: Math.round(claimed * 100) / 100,
+      pending: Math.round(pending * 100) / 100,
+      adminAdjustments: Math.round(adminAdj * 100) / 100,
       claimable,
       friends: friends.slice(0, 30),
       tiers: TIERS,
@@ -147,16 +172,121 @@ export class ReferralsService {
     };
   }
 
-  async claim(userId: string) {
+  /** Пользователь запрашивает вывод — создаётся заявка, деньги НЕ зачисляются сразу. */
+  async requestWithdrawal(userId: string) {
     const status = await this.myStatus(userId);
     if (status.claimable <= 0) {
-      throw new BadRequestException('Nothing to claim yet — invite friends and let them play.');
+      throw new BadRequestException('Нечего выводить — пригласите друзей и дайте им поиграть.');
     }
-    const amount = status.claimable;
-    await this.wallet.adminAdjust(userId, amount, userId, 'Referral payout');
-    await this.prisma.auditLog.create({
-      data: { actorId: userId, action: 'REFERRAL_CLAIM', targetType: 'User', targetId: userId, metadata: { amount } },
+    const existingPending = await this.prisma.referralWithdrawal.findFirst({
+      where: { userId, status: ReferralWithdrawalStatus.PENDING },
     });
-    return { claimed: amount };
+    if (existingPending) {
+      throw new BadRequestException('У вас уже есть заявка на вывод, ожидайте решения администратора.');
+    }
+    return this.prisma.referralWithdrawal.create({
+      data: { userId, amount: status.claimable },
+    });
+  }
+
+  async myWithdrawals(userId: string) {
+    return this.prisma.referralWithdrawal.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+    });
+  }
+
+  // ================= ADMIN =================
+
+  /** Ручная корректировка "баланса" реф-системы: +начислить / −списать. */
+  async adminAdjustEarned(userId: string, amount: number, actorId: string, note?: string) {
+    if (!amount) throw new BadRequestException('Сумма не может быть нулевой.');
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'REFERRAL_ADMIN_ADJUST',
+        targetType: 'User',
+        targetId: userId,
+        metadata: { amount, note: note ?? null },
+      },
+    });
+    return this.myStatus(userId);
+  }
+
+  async listWithdrawals(status?: ReferralWithdrawalStatus, take = 50) {
+    return this.prisma.referralWithdrawal.findMany({
+      where: status ? { status } : {},
+      orderBy: { createdAt: 'desc' },
+      take,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            telegramUsername: true,
+            referralCode: true,
+            status: true,
+            createdAt: true,
+            _count: { select: { referrals: true } },
+          },
+        },
+        reviewedBy: { select: { id: true, email: true, displayName: true } },
+      },
+    });
+  }
+
+  async approveWithdrawal(id: string, actorId: string) {
+    const wr = await this.prisma.referralWithdrawal.findUnique({ where: { id } });
+    if (!wr) throw new NotFoundException('Заявка не найдена.');
+    if (wr.status !== ReferralWithdrawalStatus.PENDING) {
+      throw new BadRequestException('Только заявки в статусе PENDING можно одобрить.');
+    }
+
+    await this.wallet.adminAdjust(
+      wr.userId,
+      wr.amount,
+      actorId,
+      `Referral withdrawal ${wr.id}`,
+      `referral-withdrawal:${wr.id}`,
+    );
+
+    return this.prisma.referralWithdrawal.update({
+      where: { id },
+      data: { status: ReferralWithdrawalStatus.APPROVED, reviewedById: actorId, reviewedAt: new Date() },
+    });
+  }
+
+  async rejectWithdrawal(id: string, actorId: string, note?: string) {
+    const wr = await this.prisma.referralWithdrawal.findUnique({ where: { id } });
+    if (!wr) throw new NotFoundException('Заявка не найдена.');
+    if (wr.status !== ReferralWithdrawalStatus.PENDING) {
+      throw new BadRequestException('Только заявки в статусе PENDING можно отклонить.');
+    }
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'REFERRAL_WITHDRAWAL_REJECT',
+        targetType: 'User',
+        targetId: wr.userId,
+        metadata: { withdrawalId: id, amount: wr.amount.toString(), note: note ?? null },
+      },
+    });
+    return this.prisma.referralWithdrawal.update({
+      where: { id },
+      data: { status: ReferralWithdrawalStatus.REJECTED, reviewedById: actorId, reviewedAt: new Date(), reviewNote: note ?? null },
+    });
+  }
+
+  /** Полная карточка реферальной системы юзера для админки. */
+  async adminUserReferralProfile(userId: string) {
+    const status = await this.myStatus(userId);
+    const withdrawals = await this.prisma.referralWithdrawal.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+    });
+    return { ...status, withdrawals };
   }
 }

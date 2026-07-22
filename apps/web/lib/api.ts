@@ -74,6 +74,21 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ amount, note }),
       }),
+      referralWithdrawals: (status?: string) =>
+      req(`/admin/referrals/withdrawals${status ? `?status=${status}` : ''}`),
+    approveReferralWithdrawal: (id: string) =>
+      req(`/admin/referrals/withdrawals/${id}/approve`, { method: 'POST' }),
+    rejectReferralWithdrawal: (id: string, note?: string) =>
+      req(`/admin/referrals/withdrawals/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ note }),
+      }),
+    userReferralProfile: (id: string) => req(`/admin/users/${id}/referrals`),
+    adjustReferralBalance: (id: string, amount: number, note?: string) =>
+      req(`/admin/users/${id}/referrals/adjust`, {
+        method: 'POST',
+        body: JSON.stringify({ amount, note }),
+      }),
     markets: (status?: string) =>
       req(`/admin/markets${status ? `?status=${status}` : ''}`),
     resolve: (id: string, outcomeId: string) =>

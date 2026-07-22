@@ -22,6 +22,8 @@ import {
   UpdateSettingsDto,
   BroadcastDto,
   ResetPasswordDto,
+  ReferralAdjustDto,
+  ReferralWithdrawalRejectDto,
 } from './dto';
 
 @Roles('ADMIN', 'SUPERADMIN')
@@ -69,6 +71,31 @@ export class AdminController {
     return this.admin.adjustBalance(id, dto.amount, dto.note, req.user.id);
   }
 
+  @Get('referrals/withdrawals')
+  referralWithdrawals(@Query('status') status?: string) {
+    return this.admin.referralWithdrawals(status);
+  }
+
+  @Post('referrals/withdrawals/:id/approve')
+  approveReferralWithdrawal(@Req() req: any, @Param('id') id: string) {
+    return this.admin.approveReferralWithdrawal(id, req.user.id);
+  }
+
+  @Post('referrals/withdrawals/:id/reject')
+  rejectReferralWithdrawal(@Req() req: any, @Param('id') id: string, @Body() dto: ReferralWithdrawalRejectDto) {
+    return this.admin.rejectReferralWithdrawal(id, req.user.id, dto.note);
+  }
+
+  @Get('users/:id/referrals')
+  userReferralProfile(@Param('id') id: string) {
+    return this.admin.userReferralProfile(id);
+  }
+
+  @Post('users/:id/referrals/adjust')
+  adjustReferralBalance(@Req() req: any, @Param('id') id: string, @Body() dto: ReferralAdjustDto) {
+    return this.admin.adjustReferralBalance(id, dto.amount, dto.note, req.user.id);
+  }
+  
   @Get('markets')
   markets(@Query('status') status?: string) {
     return this.admin.markets(status);

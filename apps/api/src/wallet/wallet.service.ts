@@ -63,6 +63,7 @@ export class WalletService {
     amount: Prisma.Decimal.Value,
     actorId: string,
     note?: string,
+    idempotencyKey?: string,
   ) {
     const amt = new Prisma.Decimal(amount);
     if (amt.isZero()) throw new BadRequestException('Amount cannot be zero.');
@@ -73,6 +74,7 @@ export class WalletService {
         kind: 'ADMIN_ADJUST',
         createdById: actorId,
         reference: userId,
+        idempotencyKey,
         metadata: note ? { note } : undefined,
         legs: [
           { accountId: equity.id, amount: amt.negated() },
