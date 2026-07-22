@@ -167,6 +167,7 @@ function Dashboard() {
 function Users() {
   const [users, setUsers] = useState<any[]>([]);
   const [reportId, setReportId] = useState<string | null>(null);
+  const [refProfileId, setRefProfileId] = useState<string | null>(null); // ← новая строка
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -208,7 +209,7 @@ function Users() {
   }
 
   return (
-    <div className="rounded-2xl panel">
+   <div className="rounded-2xl panel">
       {msg && <p className="border-b hairline px-5 py-3 text-sm text-gold-deep">{msg}</p>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -220,6 +221,7 @@ function Users() {
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Adjust balance</th>
               <th className="px-4 py-3">Report</th>
+              <th className="px-4 py-3">Referrals</th>
               <th className="px-4 py-3">Password</th>
             </tr>
           </thead>
@@ -283,6 +285,14 @@ function Users() {
                 </td>
                 <td className="px-4 py-3">
                   <button
+                    onClick={() => setRefProfileId(u.id)}
+                    className="rounded-lg border hairline px-3 py-1 text-fg/70 transition hover:border-gold/40 hover:text-gold-deep"
+                  >
+                    Referrals
+                  </button>
+                </td>
+                <td className="px-4 py-3">
+                  <button
                     onClick={() => resetPassword(u.id, u.email)}
                     className="rounded-lg border hairline px-3 py-1 text-fg/70 transition hover:border-lose/40 hover:text-lose"
                   >
@@ -295,6 +305,7 @@ function Users() {
         </table>
       </div>
       {reportId && <PlayerReportModal id={reportId} onClose={() => setReportId(null)} />}
+      {refProfileId && <ReferralProfileModal id={refProfileId} onClose={() => setRefProfileId(null)} />}
     </div>
   );
 }
