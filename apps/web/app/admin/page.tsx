@@ -489,16 +489,17 @@ function ReferralProfileModal({ id, onClose }: { id: string; onClose: () => void
               <button onClick={onClose} className="rounded-lg border hairline px-3 py-1.5 text-sm text-fg/60 hover:text-fg">Close</button>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Mini label="Referrals" node={<span>{r.referrals}</span>} />
-              <Mini label="Tier" node={<span>{r.ratePct}%</span>} />
-              <Mini label="Earned total" node={<span className="text-gold-deep">{fmtMoney(r.earned)}</span>} />
-              <Mini label="Claimable now" node={<span>{fmtMoney(r.claimable)}</span>} />
-              <Mini label="Already paid" node={<span>{fmtMoney(r.claimed)}</span>} />
-              <Mini label="Pending requests" node={<span>{fmtMoney(r.pending)}</span>} />
-              <Mini label="Admin adjustments" node={<span>{fmtMoney(r.adminAdjustments)}</span>} />
-              <Mini label="Total wagered by refs" node={<span>{fmtMoney(r.totalWagered)}</span>} />
-            </div>
+           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+  <Mini label="Referrals" node={<span>{r.referrals}</span>} />
+  <Mini label="Tier" node={<span>{r.ratePct}%</span>} />
+  <Mini label="Total lost by refs" node={<span className="text-lose">{fmtMoney(r.totalLost)}</span>} />
+  <Mini label="Earned total" node={<span className="text-gold-deep">{fmtMoney(r.earned)}</span>} />
+  <Mini label="Claimable now" node={<span>{fmtMoney(r.claimable)}</span>} />
+  <Mini label="Already paid" node={<span>{fmtMoney(r.claimed)}</span>} />
+  <Mini label="Pending requests" node={<span>{fmtMoney(r.pending)}</span>} />
+  <Mini label="Admin adjustments" node={<span>{fmtMoney(r.adminAdjustments)}</span>} />
+  <Mini label="Total wagered by refs" node={<span>{fmtMoney(r.totalWagered)}</span>} />
+</div>
 
             <h3 className="mt-6 font-display text-sm font-semibold text-fg/80">Manual balance adjustment</h3>
             <p className="mt-1 text-xs text-fg/45">Положительное число — начислить, отрицательное — списать. Записывается в audit log.</p>
