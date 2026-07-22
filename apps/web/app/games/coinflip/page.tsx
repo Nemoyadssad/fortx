@@ -24,6 +24,18 @@ export default function CoinflipPage() {
 
   const phase: 'idle' | 'flipping' | 'result' = flipping ? 'flipping' : res && !res.error ? 'result' : 'idle';
 
+  // Rotate the coin at rest to visually face the chosen side.
+  function selectSide(s: 'heads' | 'tails') {
+    if (flipping) return;
+    setSide(s);
+    setRes(null);
+    const target = s === 'heads' ? 0 : 180;
+    const current = rotRef.current % 360;
+    const diff = ((target - current + 540) % 360) - 180; // shortest angular path
+    rotRef.current += diff;
+    setRotation(rotRef.current);
+  }
+
   async function flip(useWinnings = false) {
     if (!email) { window.dispatchEvent(new CustomEvent('predikt:auth')); return; }
     if (flipping) return;
@@ -117,7 +129,9 @@ export default function CoinflipPage() {
           style={{
             transformStyle: 'preserve-3d',
             transform: `rotateY(${rotation}deg)`,
-            transition: flipping ? 'transform 2.1s cubic-bezier(0.2,0.7,0.15,1)' : 'none',
+            transition: flipping
+              ? 'transform 2.1s cubic-bezier(0.2,0.7,0.15,1)'
+              : 'transform 0.5s cubic-bezier(0.4,0.2,0.2,1)',
             animation: landed ? 'coinLand 0.6s ease-out' : undefined,
             filter: flipping
               ? 'drop-shadow(0 10px 24px rgba(245,197,66,0.35))'
@@ -185,7 +199,7 @@ export default function CoinflipPage() {
           return (
             <button
               key={s}
-              onClick={() => setSide(s)}
+              onClick={() => selectSide(s)}
               disabled={flipping}
               className={`group relative overflow-hidden rounded-2xl border py-4 font-semibold transition-all disabled:opacity-50 ${
                 active
