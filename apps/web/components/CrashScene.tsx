@@ -209,18 +209,85 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: C
 
       if (active && !crashed) {
         const wobble = Math.sin(now * 6) * 2;
+        const flicker = 0.7 + Math.random() * 0.3;
         ctx!.save();
         ctx!.translate(px, py + wobble);
         ctx!.rotate(-0.5);
-        ctx!.shadowBlur = 18;
-        ctx!.shadowColor = 'rgba(245,197,66,0.7)';
-        ctx!.fillStyle = '#f5c542';
+
+        // exhaust flame (drawn first, behind the rocket body)
+        const flameLen = 22 * flicker;
+        const flameGrad = ctx!.createLinearGradient(-10, 0, -10 - flameLen, 0);
+        flameGrad.addColorStop(0, 'rgba(255,220,120,0.95)');
+        flameGrad.addColorStop(0.4, 'rgba(255,140,50,0.85)');
+        flameGrad.addColorStop(1, 'rgba(255,80,50,0)');
+        ctx!.fillStyle = flameGrad;
+        ctx!.shadowBlur = 16;
+        ctx!.shadowColor = 'rgba(255,140,50,0.8)';
         ctx!.beginPath();
-        ctx!.moveTo(10, 0);
-        ctx!.lineTo(-8, -5);
-        ctx!.lineTo(-8, 5);
+        ctx!.moveTo(-9, -4);
+        ctx!.quadraticCurveTo(-10 - flameLen * 0.6, 0, -9 - flameLen, 0);
+        ctx!.quadraticCurveTo(-10 - flameLen * 0.6, 0, -9, 4);
         ctx!.closePath();
         ctx!.fill();
+
+        ctx!.shadowBlur = 20;
+        ctx!.shadowColor = 'rgba(245,197,66,0.75)';
+
+        // rear fins
+        ctx!.fillStyle = '#d94f4f';
+        ctx!.beginPath();
+        ctx!.moveTo(-6, -3);
+        ctx!.lineTo(-14, -9);
+        ctx!.lineTo(-9, -2.5);
+        ctx!.closePath();
+        ctx!.fill();
+        ctx!.beginPath();
+        ctx!.moveTo(-6, 3);
+        ctx!.lineTo(-14, 9);
+        ctx!.lineTo(-9, 2.5);
+        ctx!.closePath();
+        ctx!.fill();
+
+        // main body (nose cone to tail), rounded capsule shape
+        const bodyGrad = ctx!.createLinearGradient(-10, -6, 12, 6);
+        bodyGrad.addColorStop(0, '#e8edf4');
+        bodyGrad.addColorStop(0.5, '#ffffff');
+        bodyGrad.addColorStop(1, '#c7cedb');
+        ctx!.fillStyle = bodyGrad;
+        ctx!.beginPath();
+        ctx!.moveTo(14, 0);
+        ctx!.quadraticCurveTo(8, -6.5, -8, -5.5);
+        ctx!.quadraticCurveTo(-11, 0, -8, 5.5);
+        ctx!.quadraticCurveTo(8, 6.5, 14, 0);
+        ctx!.closePath();
+        ctx!.fill();
+        ctx!.strokeStyle = 'rgba(150,110,30,0.35)';
+        ctx!.lineWidth = 0.6;
+        ctx!.stroke();
+
+        // nose tip accent
+        ctx!.fillStyle = '#f5c542';
+        ctx!.beginPath();
+        ctx!.moveTo(14, 0);
+        ctx!.quadraticCurveTo(9, -3, 5, -2.2);
+        ctx!.quadraticCurveTo(9, 0, 5, 2.2);
+        ctx!.quadraticCurveTo(9, 3, 14, 0);
+        ctx!.closePath();
+        ctx!.fill();
+
+        // window
+        ctx!.shadowBlur = 0;
+        const winGrad = ctx!.createRadialGradient(-1, -1, 0.3, 0, 0, 3.4);
+        winGrad.addColorStop(0, '#dff3ff');
+        winGrad.addColorStop(1, '#3aa3ff');
+        ctx!.fillStyle = winGrad;
+        ctx!.beginPath();
+        ctx!.arc(-1, 0, 3.2, 0, Math.PI * 2);
+        ctx!.fill();
+        ctx!.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx!.lineWidth = 0.8;
+        ctx!.stroke();
+
         ctx!.restore();
       }
 
