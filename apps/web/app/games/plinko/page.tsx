@@ -4,11 +4,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import { fmtMoney } from '@/lib/format';
-import PlinkoScene from '@/components/PlinkoScene';
+import PlinkoScene, { PlinkoDrop } from '@/components/PlinkoScene';
 
 const CHIPS = [0.5, 1, 5, 10];
 const ROWS_OPTS = [8, 12, 16];
+const BALL_OPTS = [1, 5, 10, 25];
 const EDGE = 0.97;
+const DROP_STAGGER_MS = 90;
 
 function pascal(n: number): number[] {
   const row = [1];
@@ -38,24 +40,29 @@ const bucketColor = (m: number) =>
 const particleColor = (m: number) =>
   m >= 3 ? '245,197,66' : m >= 1 ? '46,213,115' : '255,77,109';
 
+type LandedBall = { id: number; bucket: number; multiplier: number; payout: number };
+
 export default function PlinkoPage() {
   const { email, refreshBalance } = useAuth();
   const [stake, setStake] = useState(1);
   const [rows, setRows] = useState(12);
   const [risk, setRisk] = useState<'low' | 'medium' | 'high'>('medium');
+  const [ballCount, setBallCount] = useState(1);
   const [dropping, setDropping] = useState(false);
-  const [path, setPath] = useState<string | null>(null);
-  const [dropToken, setDropToken] = useState(0);
-  const [landed, setLanded] = useState<{ bucket: number; multiplier: number; payout: number } | null>(null);
+  const [drops, setDrops] = useState<PlinkoDrop[]>([]);
+  const [landedBuckets, setLandedBuckets] = useState<Record<number, number>>({}); // bucket -> highlight count
+  const [results, setResults] = useState<LandedBall[]>([]);
+  const [expectedCount, setExpectedCount] = useState(0);
   const [recent, setRecent] = useState<any[]>([]);
-  const pendingRef = useRef<{ bucket: number; multiplier: number; payout: number } | null>(null);
+
+  const pendingRef = useRef<Map<number, LandedBall>>(new Map());
+  const idCounter = useRef(0);
 
   const mults = useMemo(() => plinkoMultipliers(rows, risk), [rows, risk]);
 
   const load = () => api.games.plinkoRecent().then(setRecent).catch(() => {});
   useEffect(() => { load(); }, []);
 
-  // peg dots (percentages, same layout as before)
   const pegs: { x: number; top: number }[] = [];
   for (let r = 1; r < rows; r++) {
     for (let p = 0; p <= r; p++) {
@@ -66,24 +73,44 @@ export default function PlinkoPage() {
   async function drop() {
     if (!email) { window.dispatchEvent(new CustomEvent('predikt:auth')); return; }
     setDropping(true);
-    setLanded(null);
-    setPath(null);
+    setResults([]);
+    setLandedBuckets({});
+    setDrops([]);
+    pendingRef.current = new Map();
+    setExpectedCount(ballCount);
+
+    const newDrops: PlinkoDrop[] = [];
     try {
-      const r = await api.games.plinkoPlay(stake, rows, risk);
+      for (let i = 0; i < ballCount; i++) {
+        const r = await api.games.plinkoPlay(stake, rows, risk);
+        const id = ++idCounter.current;
+        pendingRef.current.set(id, { id, bucket: r.bucket, multiplier: r.multiplier, payout: r.payout });
+        newDrops.push({ id, path: r.path, multiplier: r.multiplier, startDelay: i * DROP_STAGGER_MS });
+      }
       await refreshBalance();
-      pendingRef.current = { bucket: r.bucket, multiplier: r.multiplier, payout: r.payout };
-      setPath(r.path);
-      setDropToken((t) => t + 1);
+      setDrops(newDrops);
     } catch (e: any) {
       setDropping(false);
     }
   }
 
-  function onLand() {
-    setLanded(pendingRef.current);
-    setDropping(false);
-    load();
+  function onBallLand(id: number, _multiplier: number) {
+    const info = pendingRef.current.get(id);
+    if (!info) return;
+    setResults((prev) => {
+      const next = [...prev, info];
+      if (next.length >= expectedCount) {
+        setDropping(false);
+        load();
+      }
+      return next;
+    });
+    setLandedBuckets((prev) => ({ ...prev, [info.bucket]: (prev[info.bucket] ?? 0) + 1 }));
   }
+
+  const totalPayout = results.reduce((s, r) => s + r.payout, 0);
+  const totalStake = results.length * stake;
+  const allLanded = results.length > 0 && results.length >= expectedCount;
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-10">
@@ -95,18 +122,16 @@ export default function PlinkoPage() {
         <PlinkoScene
           rows={rows}
           pegs={pegs}
-          path={path}
-          dropToken={dropToken}
+          drops={drops}
           particleColor={particleColor}
-          multiplier={landed?.multiplier ?? pendingRef.current?.multiplier ?? null}
-          onLand={onLand}
+          onLand={onBallLand}
         />
         {/* buckets */}
         <div className="absolute inset-x-2 bottom-2 flex gap-0.5">
           {mults.map((m, i) => (
             <div
               key={i}
-              className={`flex-1 rounded py-1 text-center font-mono text-[9px] font-bold transition ${bucketColor(m)} ${landed?.bucket === i ? 'ring-2 ring-white scale-110' : ''}`}
+              className={`flex-1 rounded py-1 text-center font-mono text-[9px] font-bold transition ${bucketColor(m)} ${landedBuckets[i] ? 'ring-2 ring-white scale-110' : ''}`}
             >
               {m}×
             </div>
@@ -114,10 +139,29 @@ export default function PlinkoPage() {
         </div>
       </div>
 
-      {landed && (
-        <p className={`mt-3 text-center text-sm font-semibold ${landed.multiplier >= 1 ? 'text-win' : 'text-lose'}`}>
-          {landed.multiplier}× · {landed.payout > 0 ? `+${fmtMoney(landed.payout)}` : 'no win'}
-        </p>
+      {results.length > 0 && (
+        <div className="mt-3 text-center">
+          {ballCount === 1 ? (
+            <p className={`text-sm font-semibold ${results[0].multiplier >= 1 ? 'text-win' : 'text-lose'}`}>
+              {results[0].multiplier}× · {results[0].payout > 0 ? `+${fmtMoney(results[0].payout)}` : 'no win'}
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {results.map((r) => (
+                  <span key={r.id} className={`rounded-lg px-2 py-1 font-mono text-xs ${r.multiplier >= 1 ? 'bg-win/15 text-win' : 'bg-lose/15 text-lose'}`}>
+                    {r.multiplier}×
+                  </span>
+                ))}
+              </div>
+              {allLanded && (
+                <p className={`mt-2 text-sm font-semibold ${totalPayout >= totalStake ? 'text-win' : 'text-lose'}`}>
+                  {results.length}/{expectedCount} balls · total {fmtMoney(totalPayout)}
+                </p>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       {/* controls */}
@@ -141,13 +185,25 @@ export default function PlinkoPage() {
           </div>
         </div>
 
-        <label className="mt-4 block font-mono text-[10px] uppercase tracking-widest text-fg/40">Stake</label>
+        <label className="mt-4 block font-mono text-[10px] uppercase tracking-widest text-fg/40">Balls</label>
+        <div className="mt-2 flex gap-2">
+          {BALL_OPTS.map((n) => (
+            <button key={n} onClick={() => setBallCount(n)} disabled={dropping} className={`flex-1 rounded-lg border py-1.5 text-sm transition ${ballCount === n ? 'border-gold/50 bg-gold/15 text-gold-deep' : 'border-fg/[0.08] text-fg/55'}`}>{n}</button>
+          ))}
+        </div>
+
+        <label className="mt-4 block font-mono text-[10px] uppercase tracking-widest text-fg/40">Stake per ball</label>
         <input type="number" min={1} value={stake} onChange={(e) => setStake(Math.max(1, Number(e.target.value)))} className="mt-2 w-full rounded-xl border hairline bg-fg/[0.03] px-4 py-2.5 font-mono outline-none focus:border-gold/50" />
         <div className="mt-2 flex gap-2">
           {CHIPS.map((v) => <button key={v} onClick={() => setStake(v)} className="flex-1 rounded-lg border hairline py-1.5 text-xs text-fg/60 transition hover:border-gold/40 hover:text-gold-deep">{v}</button>)}
         </div>
+
         <button onClick={drop} disabled={dropping} className="mt-3 w-full rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3 font-bold text-black shadow-gold transition hover:brightness-105 disabled:opacity-50">
-          {dropping ? 'Dropping…' : email ? `Drop ${fmtMoney(stake)}` : 'Sign in to play'}
+          {dropping
+            ? `Dropping ${results.length}/${expectedCount}…`
+            : email
+            ? `Drop ${ballCount > 1 ? `${ballCount} × ` : ''}${fmtMoney(stake)}`
+            : 'Sign in to play'}
         </button>
       </div>
 

@@ -9,33 +9,46 @@ type Particle = {
   life: number; maxLife: number; size: number; color: string;
 };
 
+export type PlinkoDrop = {
+  id: number;
+  path: string;
+  multiplier: number;
+  startDelay?: number; // ms, for a staggered cascade when many balls drop together
+};
+
+type BallAnim = {
+  waypoints: { x: number; y: number }[];
+  startTime: number;
+  landed: boolean;
+  multiplier: number;
+};
+
 type PlinkoSceneProps = {
   rows: number;
   pegs: Peg[];
-  path: string | null;        // e.g. "LRLRRL…" — the server's true drop path
-  dropToken: number;          // bump to trigger a fresh drop animation
-  particleColor: (m: number) => string; // 'r,g,b' string for the landing burst
-  multiplier: number | null;
-  onLand?: () => void;
+  drops: PlinkoDrop[];
+  particleColor: (m: number) => string; // 'r,g,b'
+  onLand?: (id: number, multiplier: number) => void;
 };
 
-export default function PlinkoScene({
-  rows, pegs, path, dropToken, particleColor, multiplier, onLand,
-}: PlinkoSceneProps) {
+const SEGMENT_MS = 150;
+const GLOW_RADIUS = 16; // px — how close the ball needs to be to light up a peg
+
+function easeInOutSine(t: number) {
+  return -(Math.cos(Math.PI * t) - 1) / 2;
+}
+
+export default function PlinkoScene({ rows, pegs, drops, particleColor, onLand }: PlinkoSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const particlesRef = useRef<Particle[]>([]);
-  const pegHitRef = useRef<Map<number, number>>(new Map());
-  const ballRef = useRef({ x: 0, y: 0, visible: false });
-  const wpRef = useRef<{ x: number; y: number }[]>([]);
-  const startRef = useRef(0);
-  const landedRef = useRef(false);
+  const ballsRef = useRef<Map<number, BallAnim>>(new Map());
+  const pegGlowRef = useRef<Float32Array>(new Float32Array(0));
+  const seenIdsRef = useRef<Set<number>>(new Set());
+  const sizeRef = useRef({ w: 0, h: 0 });
   const onLandRef = useRef(onLand);
   onLandRef.current = onLand;
-  const sizeRef = useRef({ w: 0, h: 0 });
-  const SEGMENT_MS = 130;
 
-  // keep canvas pixel size in sync with its container
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -54,31 +67,40 @@ export default function PlinkoScene({
     return () => window.removeEventListener('resize', resize);
   }, []);
 
-  // build the real waypoints from the server path & start a fresh drop
   useEffect(() => {
-    if (!path) return;
+    if (pegGlowRef.current.length !== pegs.length) {
+      pegGlowRef.current = new Float32Array(pegs.length);
+    }
+  }, [pegs.length]);
+
+  // register any newly-arrived drops as fresh ball animations
+  useEffect(() => {
     const { w, h } = sizeRef.current;
     if (!w || !h) return;
+    for (const d of drops) {
+      if (seenIdsRef.current.has(d.id)) continue;
+      seenIdsRef.current.add(d.id);
 
-    const waypoints: { x: number; y: number }[] = [{ x: w * 0.5, y: -h * 0.06 }];
-    let rights = 0;
-    for (let r = 0; r <= rows; r++) {
-      if (r > 0 && path[r - 1] === 'R') rights++;
-      const disp = 2 * rights - r;
-      const xPct = 50 + (disp / rows) * 42;
-      const yPct = (r / rows) * 86 + 4;
-      waypoints.push({ x: (xPct / 100) * w, y: (yPct / 100) * h });
+      const waypoints: { x: number; y: number }[] = [{ x: w * 0.5, y: -h * 0.06 }];
+      let rights = 0;
+      for (let r = 0; r <= rows; r++) {
+        if (r > 0 && d.path[r - 1] === 'R') rights++;
+        const disp = 2 * rights - r;
+        const xPct = 50 + (disp / rows) * 42;
+        const yPct = (r / rows) * 86 + 4;
+        waypoints.push({ x: (xPct / 100) * w, y: (yPct / 100) * h });
+      }
+      const last = waypoints[waypoints.length - 1];
+      waypoints.push({ x: last.x, y: h * 0.98 });
+
+      ballsRef.current.set(d.id, {
+        waypoints,
+        startTime: performance.now() + (d.startDelay ?? 0),
+        landed: false,
+        multiplier: d.multiplier,
+      });
     }
-    const last = waypoints[waypoints.length - 1];
-    waypoints.push({ x: last.x, y: h * 0.98 });
-
-    wpRef.current = waypoints;
-    startRef.current = performance.now();
-    landedRef.current = false;
-    ballRef.current = { x: waypoints[0].x, y: waypoints[0].y, visible: true };
-    particlesRef.current = [];
-    pegHitRef.current = new Map();
-  }, [dropToken, path, rows]);
+  }, [drops, rows]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -90,101 +112,102 @@ export default function PlinkoScene({
       const { w, h } = sizeRef.current;
       ctx!.clearRect(0, 0, w, h);
 
-      // pegs — glow briefly when the ball passes through them
-      for (let i = 0; i < pegs.length; i++) {
-        const p = pegs[i];
-        const px = (p.x / 100) * w;
-        const py = (p.top / 100) * h;
-        const hitAt = pegHitRef.current.get(i);
-        const since = hitAt ? performance.now() - hitAt : Infinity;
-        const glow = since < 260 ? 1 - since / 260 : 0;
-        ctx!.beginPath();
-        ctx!.shadowBlur = glow > 0 ? 10 * glow : 0;
-        ctx!.shadowColor = 'rgba(245,197,66,0.9)';
-        ctx!.fillStyle = glow > 0 ? `rgba(245,197,66,${0.55 + glow * 0.45})` : 'rgba(255,255,255,0.25)';
-        ctx!.arc(px, py, 2.2 + glow * 1.8, 0, Math.PI * 2);
-        ctx!.fill();
-        ctx!.shadowBlur = 0;
-      }
+      // decay peg glow each frame; balls will top it back up when nearby
+      const glow = pegGlowRef.current;
+      for (let i = 0; i < glow.length; i++) glow[i] *= 0.88;
 
-      const wps = wpRef.current;
-      const elapsed = performance.now() - startRef.current;
-      const totalDur = SEGMENT_MS * Math.max(1, wps.length - 1);
+      const now = performance.now();
 
-      if (ballRef.current.visible && wps.length > 1) {
-        const segFloat = elapsed / SEGMENT_MS;
+      for (const [id, ball] of ballsRef.current) {
+        const elapsed = now - ball.startTime;
+        if (elapsed < 0) continue; // still waiting for its staggered start
+
+        const wps = ball.waypoints;
+        const totalDur = SEGMENT_MS * (wps.length - 1);
+        const segFloat = Math.max(0, elapsed) / SEGMENT_MS;
         const segIndex = Math.min(wps.length - 2, Math.floor(segFloat));
-        const segT = Math.min(1, segFloat - segIndex);
+        const rawT = Math.min(1, segFloat - segIndex);
+        const t = easeInOutSine(rawT);
         const a = wps[segIndex];
         const b = wps[segIndex + 1];
 
-        // quadratic arc between waypoints — gives a natural bounce/gravity feel
+        // gentle roll: shallow control point, hugging the true path instead of bouncing
         const midX = (a.x + b.x) / 2;
-        const midY = Math.max(a.y, b.y) + 6;
-        const t = segT;
-        const x = (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * midX + t * t * b.x;
-        const y = (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * midY + t * t * b.y;
-        ballRef.current.x = x;
-        ballRef.current.y = y;
+        const midY = (a.y + b.y) / 2 + 2.5;
+        const x = (1 - t) ** 2 * a.x + 2 * (1 - t) * t * midX + t ** 2 * b.x;
+        const y = (1 - t) ** 2 * a.y + 2 * (1 - t) * t * midY + t ** 2 * b.y;
 
-        // flag the nearest peg as "hit" as the ball nears a waypoint
-        if (segT > 0.85 && segIndex + 1 < wps.length - 1) {
-          let bestI = -1, bestD = Infinity;
-          for (let i = 0; i < pegs.length; i++) {
-            const p = pegs[i];
-            const px = (p.x / 100) * w, py = (p.top / 100) * h;
-            const d = (px - b.x) ** 2 + (py - b.y) ** 2;
-            if (d < bestD) { bestD = d; bestI = i; }
-          }
-          if (bestI >= 0 && bestD < 100 && !pegHitRef.current.has(bestI)) {
-            pegHitRef.current.set(bestI, performance.now());
+        // light up any peg the ball is rolling past
+        for (let i = 0; i < pegs.length; i++) {
+          const p = pegs[i];
+          const px = (p.x / 100) * w, py = (p.top / 100) * h;
+          const d = Math.hypot(px - x, py - y);
+          if (d < GLOW_RADIUS) {
+            const strength = 1 - d / GLOW_RADIUS;
+            glow[i] = Math.max(glow[i], strength);
           }
         }
 
-        // sparkling trail
-        if (Math.random() < 0.85) {
+        // faint skid trail — low, drifting sideways rather than sparking up
+        if (Math.random() < 0.6 && elapsed < totalDur) {
           particlesRef.current.push({
-            x: x + (Math.random() - 0.5) * 2,
-            y: y + (Math.random() - 0.5) * 2,
-            vx: (Math.random() - 0.5) * 0.3,
-            vy: -Math.random() * 0.2,
-            life: 0, maxLife: 18 + Math.random() * 10,
-            size: Math.random() * 2 + 1,
+            x: x + (Math.random() - 0.5) * 3,
+            y: y + 1,
+            vx: (Math.random() - 0.5) * 0.6,
+            vy: Math.random() * 0.15,
+            life: 0, maxLife: 14 + Math.random() * 8,
+            size: Math.random() * 1.6 + 0.6,
             color: '245,197,66',
           });
         }
 
-        // landing burst
-        if (segIndex >= wps.length - 2 && segT >= 0.99 && !landedRef.current) {
-          landedRef.current = true;
-          ballRef.current.visible = false;
-          const col = multiplier != null ? particleColor(multiplier) : '245,197,66';
-          for (let i = 0; i < 40; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const speed = Math.random() * 3 + 1;
-            particlesRef.current.push({
-              x: b.x, y: b.y,
-              vx: Math.cos(angle) * speed,
-              vy: Math.sin(angle) * speed - 1,
-              life: 0, maxLife: 34 + Math.random() * 22,
-              size: Math.random() * 3 + 1.2,
-              color: col,
-            });
-          }
-          onLandRef.current?.();
-        }
-      }
-
-      if (ballRef.current.visible || elapsed < totalDur + 200) {
-        const { x, y } = ballRef.current;
+        // draw the ball itself
         const grad = ctx!.createRadialGradient(x - 1, y - 1, 0.5, x, y, 5);
         grad.addColorStop(0, '#fff5d6');
         grad.addColorStop(1, '#f5c542');
         ctx!.beginPath();
-        ctx!.shadowBlur = 12;
-        ctx!.shadowColor = 'rgba(245,197,66,0.9)';
+        ctx!.shadowBlur = 10;
+        ctx!.shadowColor = 'rgba(245,197,66,0.85)';
         ctx!.fillStyle = grad;
-        ctx!.arc(x, y, 4.5, 0, Math.PI * 2);
+        ctx!.arc(x, y, 4.2, 0, Math.PI * 2);
+        ctx!.fill();
+        ctx!.shadowBlur = 0;
+
+        // landed?
+        if (!ball.landed && elapsed >= totalDur) {
+          ball.landed = true;
+          const col = particleColor(ball.multiplier);
+          for (let i = 0; i < 34; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 2.6 + 0.8;
+            particlesRef.current.push({
+              x: b.x, y: b.y,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed - 0.8,
+              life: 0, maxLife: 30 + Math.random() * 18,
+              size: Math.random() * 2.6 + 1,
+              color: col,
+            });
+          }
+          onLandRef.current?.(id, ball.multiplier);
+        }
+
+        // clean up long after landing so the map doesn't grow forever
+        if (ball.landed && elapsed > totalDur + 600) {
+          ballsRef.current.delete(id);
+        }
+      }
+
+      // draw pegs with their current glow
+      for (let i = 0; i < pegs.length; i++) {
+        const p = pegs[i];
+        const px = (p.x / 100) * w, py = (p.top / 100) * h;
+        const g = glow[i] ?? 0;
+        ctx!.beginPath();
+        ctx!.shadowBlur = g > 0.03 ? 8 * g : 0;
+        ctx!.shadowColor = 'rgba(245,197,66,0.9)';
+        ctx!.fillStyle = g > 0.03 ? `rgba(245,197,66,${0.5 + g * 0.5})` : 'rgba(255,255,255,0.25)';
+        ctx!.arc(px, py, 2.2 + g * 1.3, 0, Math.PI * 2);
         ctx!.fill();
         ctx!.shadowBlur = 0;
       }
@@ -195,7 +218,7 @@ export default function PlinkoScene({
         p.life++;
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.05;
+        p.vy += 0.04;
         if (p.life > p.maxLife) { particles.splice(i, 1); continue; }
         const alpha = 1 - p.life / p.maxLife;
         ctx!.beginPath();
@@ -209,7 +232,7 @@ export default function PlinkoScene({
 
     rafRef.current = requestAnimationFrame(draw);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [pegs, multiplier, particleColor]);
+  }, [pegs, particleColor]);
 
   return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />;
 }
