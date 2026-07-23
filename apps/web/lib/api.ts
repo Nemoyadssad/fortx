@@ -12,21 +12,46 @@ export function setToken(token: string | null): void {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+// Отдельный класс ошибки — чтобы наверху можно было отличить
+// "сервер сказал невалидный токен" от "не достучались вообще".
+export class ApiError extends Error {
+  status: number | null; // null = сетевая ошибка / нет ответа от сервера
+  constructor(message: string, status: number | null) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function req(path: string, options: RequestInit = {}): Promise<any> {
   const token = getToken();
-  const res = await fetch(`${API}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
+
+  let res: Response;
+  try {
+    res = await fetch(`${API}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+    });
+  } catch (e) {
+    // Сеть отвалилась / таймаут / DNS — это НЕ "невалидный токен".
+    throw new ApiError('Network error, request failed', null);
+  }
+
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    // Сервер вернул не-JSON (например, 502 от прокси на холодном старте).
+    throw new ApiError('Invalid server response', res.status);
+  }
+
   if (!res.ok) {
     const msg = Array.isArray(data?.message) ? data.message.join(', ') : data?.message;
-    throw new Error(msg || `Request failed (${res.status})`);
+    throw new ApiError(msg || `Request failed (${res.status})`, res.status);
   }
   return data;
 }
