@@ -104,11 +104,11 @@ export default function GamesHub() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-10">
-      <h1 className="font-display text-3xl font-bold gold-text">{t('nav.games')}</h1>
-      <p className="mt-2 text-fg/55">{t('games.sub')}</p>
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-5 sm:py-10">
+      <h1 className="font-display text-2xl font-bold gold-text sm:text-3xl">{t('nav.games')}</h1>
+      <p className="mt-2 text-sm text-fg/55 sm:text-base">{t('games.sub')}</p>
 
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-5 lg:grid-cols-3">
         {GAMES.map((g) => {
           const off = !enabled(g.href);
 
@@ -116,7 +116,7 @@ export default function GamesHub() {
             return (
               <div
                 key={g.href}
-                className="group relative flex cursor-not-allowed flex-col overflow-hidden rounded-2xl border border-white/5 panel opacity-45"
+                className="group relative flex cursor-not-allowed flex-col overflow-hidden rounded-xl border border-white/5 panel opacity-45 sm:rounded-2xl"
               >
                 <div className="relative aspect-[16/10] overflow-hidden">
                   <Image
@@ -124,16 +124,16 @@ export default function GamesHub() {
                     alt={g.name}
                     fill
                     className="object-cover grayscale"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+                  <h2 className="font-display absolute bottom-2 left-2.5 text-sm font-bold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)] sm:bottom-3 sm:left-5 sm:text-xl">
+                    {g.name}
+                  </h2>
                 </div>
-                <div className="flex items-center justify-between gap-3 px-5 py-4">
-                  <div>
-                    <h2 className="font-display text-lg font-bold">{g.name}</h2>
-                    <p className="text-sm text-fg/50">{g.desc}</p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-fg/[0.06] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-fg/45">
+                <div className="flex items-center justify-between gap-2 px-2.5 py-2.5 sm:px-5 sm:py-4">
+                  <p className="text-[11px] leading-snug text-fg/50 sm:text-sm">{g.desc}</p>
+                  <span className="shrink-0 rounded-full bg-fg/[0.06] px-1.5 py-1 text-[8px] font-bold uppercase tracking-wide text-fg/45 sm:px-2 sm:text-[10px]">
                     Unavailable
                   </span>
                 </div>
@@ -145,7 +145,7 @@ export default function GamesHub() {
             <a
               key={g.href}
               href={g.href}
-              className={`group relative flex flex-col overflow-hidden rounded-2xl border border-white/5 panel shadow-panel transition-all duration-300 hover:-translate-y-1.5 ${g.glow}`}
+              className={`group relative flex flex-col overflow-hidden rounded-xl border border-white/5 panel shadow-panel transition-all duration-300 hover:-translate-y-1.5 sm:rounded-2xl ${g.glow}`}
             >
               {/* image banner */}
               <div className="relative aspect-[16/10] overflow-hidden">
@@ -154,7 +154,7 @@ export default function GamesHub() {
                   alt={g.name}
                   fill
                   className="object-cover transition-transform duration-500 ease-out group-hover:scale-110"
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw"
                   priority={false}
                 />
                 {/* readability gradient */}
@@ -162,15 +162,15 @@ export default function GamesHub() {
                 {/* subtle top sheen */}
                 <div className="absolute inset-0 bg-gradient-to-b from-white/[0.06] to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                 {/* title floats over the image like a banner */}
-                <h2 className="font-display absolute bottom-3 left-5 text-xl font-bold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
+                <h2 className="font-display absolute bottom-2 left-2.5 text-sm font-bold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)] sm:bottom-3 sm:left-5 sm:text-xl">
                   {g.name}
                 </h2>
               </div>
 
               {/* body */}
-              <div className="flex flex-1 items-center justify-between gap-3 px-5 py-4">
-                <p className="text-sm text-fg/55">{g.desc}</p>
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-fg/[0.05] text-fg/40 transition-all duration-300 group-hover:translate-x-0.5 group-hover:bg-gold/10 group-hover:text-gold-deep">
+              <div className="flex flex-1 items-center justify-between gap-2 px-2.5 py-2.5 sm:px-5 sm:py-4">
+                <p className="text-[11px] leading-snug text-fg/55 sm:text-sm">{g.desc}</p>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-fg/[0.05] text-xs text-fg/40 transition-all duration-300 group-hover:translate-x-0.5 group-hover:bg-gold/10 group-hover:text-gold-deep sm:h-8 sm:w-8 sm:text-base">
                   →
                 </span>
               </div>
