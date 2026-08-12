@@ -28,6 +28,72 @@ function Bool({ on }: { on: boolean }) {
   );
 }
 
+/**
+ * Full-width crown badge banner for a tier card.
+ * Renders a quilted-leather-style gradient panel in the tier's color
+ * with a large glowing crown centered on it, fading into the card body.
+ */
+function TierBadge({ color, active }: { color: string; active: boolean }) {
+  const patternId = `quilt-${color.replace('#', '')}`;
+  const glowId = `glow-${color.replace('#', '')}`;
+
+  return (
+    <div className="relative h-32 w-full overflow-hidden rounded-t-2xl">
+      {/* base color wash */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `linear-gradient(180deg, ${color}33 0%, ${color}14 45%, transparent 100%)`,
+        }}
+      />
+
+      {/* quilted texture */}
+      <svg className="absolute inset-0 h-full w-full" preserveAspectRatio="none">
+        <defs>
+          <pattern id={patternId} width="34" height="34" patternUnits="userSpaceOnUse">
+            <path
+              d="M0 17 L17 0 L34 17 L17 34 Z"
+              fill="none"
+              stroke={color}
+              strokeWidth="1"
+              opacity="0.18"
+            />
+            <circle cx="17" cy="0" r="1.4" fill={color} opacity="0.35" />
+            <circle cx="0" cy="17" r="1.4" fill={color} opacity="0.35" />
+            <circle cx="34" cy="17" r="1.4" fill={color} opacity="0.35" />
+            <circle cx="17" cy="34" r="1.4" fill={color} opacity="0.35" />
+          </pattern>
+          <radialGradient id={glowId} cx="50%" cy="42%" r="55%">
+            <stop offset="0%" stopColor={color} stopOpacity="0.55" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <rect width="100%" height="100%" fill={`url(#${patternId})`} />
+        <rect width="100%" height="100%" fill={`url(#${glowId})`} />
+      </svg>
+
+      {/* bottom fade into card body */}
+      <div
+        className="absolute inset-x-0 bottom-0 h-10"
+        style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.35) 100%)' }}
+      />
+
+      {/* crown */}
+      <div className="relative flex h-full items-center justify-center">
+        <Crown
+          className="h-14 w-14 drop-shadow-lg"
+          style={{ color, filter: `drop-shadow(0 0 14px ${color}88)` }}
+          strokeWidth={1.5}
+        />
+      </div>
+
+      {active && (
+        <div className="absolute inset-0 rounded-t-2xl ring-1 ring-inset" style={{ boxShadow: `inset 0 0 0 1px ${color}66` }} />
+      )}
+    </div>
+  );
+}
+
 export default function VipPage() {
   const { email } = useAuth();
   const [vip, setVip] = useState<any | null>(null);
@@ -105,48 +171,44 @@ export default function VipPage() {
           return (
             <div
               key={t.key}
-              className={`rounded-2xl panel p-5 transition ${active ? 'border-gold/50 shadow-gold' : ''}`}
+              className={`overflow-hidden rounded-2xl panel transition ${active ? 'border-gold/50 shadow-gold' : ''}`}
             >
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex h-11 w-11 items-center justify-center rounded-xl"
-                  style={{ background: `${t.color}22` }}
-                >
-                  <Crown className="h-5 w-5" style={{ color: t.color }} />
-                </div>
-                <div>
+              <TierBadge color={t.color} active={active} />
+
+              <div className="p-5">
+                <div className="flex items-center justify-between">
                   <h3 className="font-display text-lg font-bold">{t.name}</h3>
                   {active && <span className="text-[11px] font-semibold text-gold-deep">Your tier</span>}
                 </div>
-              </div>
 
-              <div className="mt-4 space-y-2.5 text-sm">
-                <Row label="Tier type">
-                  <span
-                    className="ml-auto rounded px-2 py-0.5 text-[11px] font-semibold"
-                    style={{ background: `${t.color}22`, color: t.color }}
-                  >
-                    {t.type}
-                  </span>
-                </Row>
-                <Row label="Cashback">
-                  <span className="ml-auto font-mono font-bold text-win">{t.cashback}</span>
-                </Row>
-                <Row label="Daily wheel boost">
-                  <span className="ml-auto font-mono font-bold text-gold-deep">{t.wheel}</span>
-                </Row>
-                <Row label="Weekly bonus">
-                  <span className="ml-auto font-mono font-bold text-fg/85">{t.weekly}</span>
-                </Row>
-                <Row label="VIP tournaments">
-                  <Bool on={t.tournaments} />
-                </Row>
-                <Row label="Priority support">
-                  <Bool on={t.support} />
-                </Row>
-                <Row label="Personal gifts">
-                  <Bool on={t.gifts} />
-                </Row>
+                <div className="mt-4 space-y-2.5 text-sm">
+                  <Row label="Tier type">
+                    <span
+                      className="ml-auto rounded px-2 py-0.5 text-[11px] font-semibold"
+                      style={{ background: `${t.color}22`, color: t.color }}
+                    >
+                      {t.type}
+                    </span>
+                  </Row>
+                  <Row label="Cashback">
+                    <span className="ml-auto font-mono font-bold text-win">{t.cashback}</span>
+                  </Row>
+                  <Row label="Daily wheel boost">
+                    <span className="ml-auto font-mono font-bold text-gold-deep">{t.wheel}</span>
+                  </Row>
+                  <Row label="Weekly bonus">
+                    <span className="ml-auto font-mono font-bold text-fg/85">{t.weekly}</span>
+                  </Row>
+                  <Row label="VIP tournaments">
+                    <Bool on={t.tournaments} />
+                  </Row>
+                  <Row label="Priority support">
+                    <Bool on={t.support} />
+                  </Row>
+                  <Row label="Personal gifts">
+                    <Bool on={t.gifts} />
+                  </Row>
+                </div>
               </div>
             </div>
           );
