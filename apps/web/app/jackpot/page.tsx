@@ -4,6 +4,7 @@ import { Trophy, Users, Coins, Clock, Sparkles, Crown, Medal } from 'lucide-reac
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import { fmtMoney } from '@/lib/format';
+import jackpotBg from './jackpot-bg.png';
 
 const COLORS = [
   '#f5c542','#3aa3ff','#1eb866','#ec4651','#a78bfa','#f97316',
@@ -52,10 +53,14 @@ function initials(name: string) {
   return name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase() || '??';
 }
 
+function pad2(n: number) {
+  return n.toString().padStart(2, '0');
+}
+
 /* ---------- Wheel ---------- */
 function JackpotWheel({ segments, rotation, pulsing }: { segments: Segment[]; rotation: number; pulsing: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const size = 300;
+  const size = 340;
 
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return;
@@ -63,21 +68,42 @@ function JackpotWheel({ segments, rotation, pulsing }: { segments: Segment[]; ro
     const dpr = window.devicePixelRatio || 1;
     canvas.width = size * dpr; canvas.height = size * dpr;
     ctx.scale(dpr, dpr);
-    const cx = size / 2, cy = size / 2, r = cx - 10;
+    const cx = size / 2, cy = size / 2, r = cx - 26;
     ctx.clearRect(0, 0, size, size);
 
     // outer glow ring
-    const glow = ctx.createRadialGradient(cx, cy, r * 0.85, cx, cy, r * 1.15);
-    glow.addColorStop(0, 'rgba(245,197,66,0.25)');
+    const glow = ctx.createRadialGradient(cx, cy, r * 0.85, cx, cy, r * 1.25);
+    glow.addColorStop(0, 'rgba(245,197,66,0.28)');
     glow.addColorStop(1, 'rgba(245,197,66,0)');
     ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.arc(cx, cy, r * 1.15, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.25, 0, Math.PI * 2); ctx.fill();
+
+    // outer bezel ring (like the reference wheel's studded rim)
+    ctx.beginPath(); ctx.arc(cx, cy, r + 14, 0, Math.PI * 2);
+    const bezel = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    bezel.addColorStop(0, '#3a2a12');
+    bezel.addColorStop(0.5, '#1a1220');
+    bezel.addColorStop(1, '#3a2a12');
+    ctx.fillStyle = bezel; ctx.fill();
+    ctx.strokeStyle = 'rgba(245,197,66,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // studs around the bezel
+    const studCount = 24;
+    for (let i = 0; i < studCount; i++) {
+      const a = (i / studCount) * Math.PI * 2 + (rotation * Math.PI) / 180 / 6;
+      const sx = cx + Math.cos(a) * (r + 14);
+      const sy = cy + Math.sin(a) * (r + 14);
+      ctx.beginPath();
+      ctx.arc(sx, sy, 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = i % 2 === 0 ? '#f5c542' : 'rgba(245,197,66,0.35)';
+      ctx.fill();
+    }
 
     if (segments.length === 0) {
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fillStyle = '#1a1a24'; ctx.fill();
+      ctx.fillStyle = '#120c1e'; ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
       ctx.font = '600 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('Waiting for players…', cx, cy);
       return;
@@ -90,7 +116,7 @@ function JackpotWheel({ segments, rotation, pulsing }: { segments: Segment[]; ro
 
     for (const seg of segments) {
       const sweep = (seg.pct / 100) * 2 * Math.PI;
-     const base = colorMap[seg.userId] ?? '#888888';
+      const base = colorMap[seg.userId] ?? '#888888';
       const grad = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
       grad.addColorStop(0, shade(base, 35));
       grad.addColorStop(1, base);
@@ -98,7 +124,7 @@ function JackpotWheel({ segments, rotation, pulsing }: { segments: Segment[]; ro
       ctx.beginPath(); ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, r, startAngle, startAngle + sweep);
       ctx.closePath();
-     ctx.fillStyle = grad; ctx.fill();
+      ctx.fillStyle = grad; ctx.fill();
       ctx.strokeStyle = '#0a0a0f'; ctx.lineWidth = 3; ctx.stroke();
       if (seg.pct > 5) {
         const mid = startAngle + sweep / 2;
@@ -114,28 +140,37 @@ function JackpotWheel({ segments, rotation, pulsing }: { segments: Segment[]; ro
 
     // rim highlight
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(245,197,66,0.35)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = 'rgba(245,197,66,0.4)'; ctx.lineWidth = 2; ctx.stroke();
 
-   // center hub
-    const hub = ctx.createRadialGradient(cx, cy, 2, cx, cy, 30);
-    hub.addColorStop(0, '#3a2f10');
+    // center hub with crown backdrop
+    const hub = ctx.createRadialGradient(cx, cy, 2, cx, cy, 34);
+    hub.addColorStop(0, '#4a3a14');
     hub.addColorStop(1, '#0a0a0f');
-    ctx.beginPath(); ctx.arc(cx, cy, 30, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2);
     ctx.fillStyle = hub; ctx.fill();
     ctx.strokeStyle = '#f5c542'; ctx.lineWidth = 3; ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, 30, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(245,197,66,0.3)'; ctx.lineWidth = 8; ctx.stroke();
   }, [segments, rotation]);
 
   return (
     <div className="relative mx-auto flex items-center justify-center" style={{ width: size, height: size }}>
-      <div className={`absolute right-[-2px] top-1/2 z-10 -translate-y-1/2 transition-transform ${pulsing ? 'animate-[bounce_0.4s_ease-in-out_infinite]' : ''}`}>
+      <div className={`absolute right-[-10px] top-1/2 z-10 -translate-y-1/2 transition-transform ${pulsing ? 'animate-[bounce_0.4s_ease-in-out_infinite]' : ''}`}>
         <div
-          className="h-0 w-0 border-y-[10px] border-r-[22px] border-y-transparent"
-          style={{ borderRightColor: '#f5c542', filter: 'drop-shadow(0 0 6px rgba(245,197,66,0.7))' }}
+          className="h-0 w-0 border-y-[11px] border-r-[24px] border-y-transparent"
+          style={{ borderRightColor: '#f5c542', filter: 'drop-shadow(0 0 8px rgba(245,197,66,0.8))' }}
         />
       </div>
-      <canvas ref={canvasRef} style={{ width: size, height: size }} className="rounded-full shadow-[0_0_40px_rgba(245,197,66,0.15)]" />
+      <canvas ref={canvasRef} style={{ width: size, height: size }} className="rounded-full" />
+      {/* crown badge at the very center, on top of the canvas hub */}
+      <div className="pointer-events-none absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center">
+        <Crown className="h-4 w-4 text-gold drop-shadow-[0_0_6px_rgba(245,197,66,0.8)]" />
+      </div>
+      {/* pedestal, echoing the reference wheel's stand */}
+      <div
+        className="absolute -bottom-4 left-1/2 h-4 w-40 -translate-x-1/2 rounded-b-full"
+        style={{ background: 'linear-gradient(180deg, rgba(245,197,66,0.18), rgba(245,197,66,0))' }}
+      />
     </div>
   );
 }
@@ -212,6 +247,27 @@ function AnimatedAmount({ value, className }: { value: number; className?: strin
     return () => cancelAnimationFrame(raf);
   }, [value]);
   return <span className={className}>{fmtMoney(display)}</span>;
+}
+
+/* ---------- Countdown, boxed like a digital display ---------- */
+function CountdownBoxes({ totalSeconds }: { totalSeconds: number }) {
+  const mm = Math.floor(totalSeconds / 60);
+  const ss = totalSeconds % 60;
+  return (
+    <div className="flex items-center gap-2">
+      {[{ label: 'MIN', val: mm }, { label: 'SEC', val: ss }].map((u, i) => (
+        <div key={u.label} className="flex items-center gap-2">
+          <div className="flex flex-col items-center">
+            <div className="min-w-[52px] rounded-lg border border-gold/25 bg-black/40 px-3 py-1.5 text-center font-mono text-xl font-bold text-gold shadow-[inset_0_0_12px_rgba(245,197,66,0.08)]">
+              {pad2(u.val)}
+            </div>
+            <span className="mt-1 font-mono text-[9px] tracking-widest text-fg/35">{u.label}</span>
+          </div>
+          {i === 0 && <span className="mb-4 font-mono text-lg text-gold/50">:</span>}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function PlayerRow({ seg, color, rank }: { seg: Segment; color: string; rank: number }) {
@@ -409,147 +465,163 @@ export default function JackpotPage() {
     : 0;
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10">
-      <div className="mb-8 text-center">
-        <div className="relative mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-gold to-gold-deep shadow-gold">
-          <Trophy className="h-7 w-7 text-black" />
-          <Sparkles className="absolute -right-1.5 -top-1.5 h-4 w-4 text-gold animate-pulse" />
-        </div>
-        <h1 className="font-display text-4xl font-bold">
-          Jackpot <span className="gold-text">Wheel</span>
-        </h1>
-        <p className="mt-2 text-fg/50">Enter the pot — win it all. Your chance = your share.</p>
-      </div>
+    <div className="relative min-h-screen overflow-hidden bg-[#07050d]">
+      {/* nebula backdrop */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          backgroundImage: `url(${jackpotBg.src})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center bottom',
+        }}
+      />
+      <div className="pointer-events-none fixed inset-0 z-0 bg-gradient-to-b from-[#07050d]/70 via-[#07050d]/40 to-[#07050d]" />
+      <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_top,rgba(167,139,250,0.12),transparent_60%)]" />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        <div className="relative flex flex-col items-center gap-5 overflow-hidden rounded-3xl border hairline panel p-6">
-          <ConfettiBurst active={showConfetti} />
-
-          <div className="text-center">
-            <p className="font-mono text-[11px] uppercase tracking-widest text-fg/40">Total pot</p>
-            <AnimatedAmount value={displayPot} className="font-display text-5xl font-bold gold-text" />
+      <div className="relative z-10 mx-auto max-w-5xl px-5 py-10">
+        <div className="mb-8 text-center">
+          <div className="relative mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-gold to-gold-deep shadow-gold">
+            <Trophy className="h-7 w-7 text-black" />
+            <Sparkles className="absolute -right-1.5 -top-1.5 h-4 w-4 text-gold animate-pulse" />
           </div>
+          <h1 className="font-display text-4xl font-bold text-white">
+            Jackpot <span className="gold-text">Wheel</span>
+          </h1>
+          <p className="mt-2 text-white/50">Enter the pot — win it all. Your chance = your share.</p>
+        </div>
 
-          <div className="relative">
-            {/* progress ring around the wheel, tracking the countdown */}
-            {wheelPhase === 'idle' && hasEntries && round?.status === 'OPEN' && (
-              <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 300 300">
-                <circle cx="150" cy="150" r="145" fill="none" stroke="rgba(245,197,66,0.12)" strokeWidth="3" />
-                <circle
-                  cx="150" cy="150" r="145" fill="none" stroke="#f5c542" strokeWidth="3"
-                  strokeDasharray={2 * Math.PI * 145}
-                  strokeDashoffset={2 * Math.PI * 145 * (1 - ringOffset / 100)}
-                  strokeLinecap="round"
-                  style={{ transition: 'stroke-dashoffset 1s linear' }}
-                />
-              </svg>
+        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+          <div className="relative flex flex-col items-center gap-5 overflow-hidden rounded-3xl border border-gold/15 bg-black/35 p-8 backdrop-blur-sm">
+            <ConfettiBurst active={showConfetti} />
+
+            <div className="text-center">
+              <p className="font-mono text-[11px] uppercase tracking-widest text-white/40">Total pot</p>
+              <AnimatedAmount value={displayPot} className="font-display text-5xl font-bold gold-text" />
+            </div>
+
+            <div className="relative pb-4">
+              {/* progress ring around the wheel, tracking the countdown */}
+              {wheelPhase === 'idle' && hasEntries && round?.status === 'OPEN' && (
+                <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 340 340">
+                  <circle cx="170" cy="170" r="163" fill="none" stroke="rgba(245,197,66,0.12)" strokeWidth="3" />
+                  <circle
+                    cx="170" cy="170" r="163" fill="none" stroke="#f5c542" strokeWidth="3"
+                    strokeDasharray={2 * Math.PI * 163}
+                    strokeDashoffset={2 * Math.PI * 163 * (1 - ringOffset / 100)}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dashoffset 1s linear' }}
+                  />
+                </svg>
+              )}
+              <JackpotWheel segments={displaySegments} rotation={rotation} pulsing={wheelPhase === 'anticipating'} />
+            </div>
+
+            {spinning && (
+              <div className="flex items-center gap-2 rounded-xl bg-gold/15 px-4 py-2 text-sm font-semibold text-gold-deep animate-pulse">
+                <Sparkles className="h-4 w-4" /> {wheelPhase === 'revealing' ? 'And the winner is…' : 'Rolling the wheel…'}
+              </div>
             )}
-            <JackpotWheel segments={displaySegments} rotation={rotation} pulsing={wheelPhase === 'anticipating'} />
+
+            {showWinner && (
+              <div className="relative flex flex-col items-center gap-1 rounded-2xl border border-gold/30 bg-gradient-to-b from-gold/15 to-transparent px-8 py-4 text-center animate-riseIn">
+                <Crown className="h-6 w-6 text-gold animate-bounce" />
+                <p className="text-xs uppercase tracking-widest text-white/50">Winner</p>
+                <p className="font-display text-2xl font-bold text-win">{resultRound!.winner}</p>
+                <p className="text-sm text-white/60">
+                  took <AnimatedAmount value={resultRound!.pot * 0.95} className="font-bold text-gold-deep" />
+                </p>
+              </div>
+            )}
+
+            {round?.status === 'OPEN' && hasEntries && wheelPhase === 'idle' && (
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-white/40">
+                  <Clock className="h-3.5 w-3.5" /> Spinning in
+                </div>
+                <CountdownBoxes totalSeconds={countdown} />
+              </div>
+            )}
+            {round?.status === 'OPEN' && !hasEntries && wheelPhase === 'idle' && (
+              <p className="text-sm text-white/40">Be the first to enter!</p>
+            )}
           </div>
 
-          {spinning && (
-            <div className="flex items-center gap-2 rounded-xl bg-gold/15 px-4 py-2 text-sm font-semibold text-gold-deep animate-pulse">
-              <Sparkles className="h-4 w-4" /> {wheelPhase === 'revealing' ? 'And the winner is…' : 'Rolling the wheel…'}
+          <div className="flex flex-col gap-4">
+            <div className="rounded-2xl border border-gold/15 bg-black/35 p-5 backdrop-blur-sm">
+              <h2 className="mb-3 font-display text-lg font-bold text-white">Enter the pot</h2>
+              <div className="flex gap-2">
+                {[1,5,10,25,50,100].map(v => (
+                  <button key={v} onClick={() => setAmount(v)}
+                    className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${amount===v ? 'bg-gold text-black shadow-gold' : 'border border-white/10 text-white/70 hover:border-gold/40'}`}>
+                    ${v}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="number" min={0.5} step={0.5} value={amount}
+                onChange={e => setAmount(Math.max(0.5, Number(e.target.value)))}
+                className="mt-3 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 font-mono text-lg text-white outline-none focus:border-gold/50"
+              />
+              {msg && <p className={`mt-2 text-xs font-medium ${msg.includes('luck') ? 'text-win' : 'text-lose'}`}>{msg}</p>}
+              <button
+                onClick={enter}
+                disabled={entering || spinning}
+                className="mt-3 w-full rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3 font-bold text-black shadow-gold transition hover:brightness-105 hover:shadow-[0_0_24px_rgba(245,197,66,0.4)] disabled:opacity-50 disabled:hover:shadow-gold"
+              >
+                {entering ? 'Entering…' : `Enter ${fmtMoney(amount)}`}
+              </button>
+              <p className="mt-2 text-center text-[11px] text-white/35">5% house rake · Winner takes the rest</p>
             </div>
-          )}
 
-          {showWinner && (
-            <div className="relative flex flex-col items-center gap-1 rounded-2xl border border-gold/30 bg-gradient-to-b from-gold/15 to-transparent px-8 py-4 text-center animate-riseIn">
-              <Crown className="h-6 w-6 text-gold animate-bounce" />
-              <p className="text-xs uppercase tracking-widest text-fg/50">Winner</p>
-              <p className="font-display text-2xl font-bold text-win">{resultRound!.winner}</p>
-              <p className="text-sm text-fg/60">
-                took <AnimatedAmount value={resultRound!.pot * 0.95} className="font-bold text-gold-deep" />
-              </p>
+            <div className="rounded-2xl border border-gold/15 bg-black/35 p-5 backdrop-blur-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <Users className="h-4 w-4 text-white/40" />
+                <h2 className="font-display font-semibold text-white">Players ({displaySegments.length})</h2>
+                <span className="ml-auto font-mono text-xs text-white/40">{displaySegments.length} entries</span>
+              </div>
+              <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
+                {sortedPlayers.length === 0 ? (
+                  <p className="text-sm text-white/40">No entries yet…</p>
+                ) : (
+                  sortedPlayers.map((seg, i) => (
+                    <PlayerRow key={seg.id} seg={seg} color={colorMap[seg.userId] ?? '#888'} rank={i + 1} />
+                  ))
+                )}
+              </div>
             </div>
-          )}
-
-          {round?.status === 'OPEN' && hasEntries && wheelPhase === 'idle' && (
-            <div className="flex items-center gap-2 text-sm text-fg/50">
-              <Clock className="h-4 w-4" />
-              Spinning in <span className="font-mono font-bold text-gold-deep">{countdown}s</span>
-            </div>
-          )}
-          {round?.status === 'OPEN' && !hasEntries && wheelPhase === 'idle' && (
-            <p className="text-sm text-fg/40">Be the first to enter!</p>
-          )}
+          </div>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <div className="rounded-2xl panel p-5">
-            <h2 className="mb-3 font-display text-lg font-bold">Enter the pot</h2>
-            <div className="flex gap-2">
-              {[1,5,10,25,50,100].map(v => (
-                <button key={v} onClick={() => setAmount(v)}
-                  className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${amount===v ? 'bg-gold text-black shadow-gold' : 'border hairline hover:border-gold/40'}`}>
-                  ${v}
-                </button>
+        {history.length > 0 && (
+          <div className="mt-8">
+            <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
+              <Coins className="h-5 w-5 text-gold-deep" /> Recent rounds
+            </h2>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {history.slice(0, 6).map((r) => (
+                <div key={r.id} className="relative overflow-hidden rounded-xl border border-gold/15 bg-black/30 p-3.5 backdrop-blur-sm">
+                  <div className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-gold/10 blur-xl" />
+                  <div className="relative flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold/25 to-gold/5 text-[11px] font-bold text-gold-deep">
+                      {r.winner ? initials(r.winner) : '—'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-white/85">
+                        {r.winner ?? 'No winner'}
+                        <span className="ml-1.5 font-normal text-white/45">won the pot</span>
+                      </p>
+                      <p className="text-[11px] text-white/35">
+                        {r.closedAt ? new Date(r.closedAt).toLocaleTimeString() : '—'} · {r.segments.length} players
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-mono text-sm font-bold text-gold-deep">{fmtMoney(r.pot * 0.95)}</span>
+                  </div>
+                </div>
               ))}
             </div>
-            <input
-              type="number" min={0.5} step={0.5} value={amount}
-              onChange={e => setAmount(Math.max(0.5, Number(e.target.value)))}
-              className="mt-3 w-full rounded-xl border hairline bg-fg/[0.04] px-4 py-2.5 font-mono text-lg outline-none focus:border-gold/50"
-            />
-            {msg && <p className={`mt-2 text-xs font-medium ${msg.includes('luck') ? 'text-win' : 'text-lose'}`}>{msg}</p>}
-            <button
-              onClick={enter}
-              disabled={entering || spinning}
-              className="mt-3 w-full rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3 font-bold text-black shadow-gold transition hover:brightness-105 hover:shadow-[0_0_24px_rgba(245,197,66,0.4)] disabled:opacity-50 disabled:hover:shadow-gold"
-            >
-              {entering ? 'Entering…' : `Enter ${fmtMoney(amount)}`}
-            </button>
-            <p className="mt-2 text-center text-[11px] text-fg/35">5% house rake · Winner takes the rest</p>
           </div>
-
-          <div className="rounded-2xl panel p-5">
-            <div className="mb-3 flex items-center gap-2">
-              <Users className="h-4 w-4 text-fg/40" />
-              <h2 className="font-display font-semibold">Players ({displaySegments.length})</h2>
-              <span className="ml-auto font-mono text-xs text-fg/40">{displaySegments.length} entries</span>
-            </div>
-            <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
-              {sortedPlayers.length === 0 ? (
-                <p className="text-sm text-fg/40">No entries yet…</p>
-              ) : (
-                sortedPlayers.map((seg, i) => (
-                  <PlayerRow key={seg.id} seg={seg} color={colorMap[seg.userId] ?? '#888'} rank={i + 1} />
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
-
-      {history.length > 0 && (
-        <div className="mt-8">
-          <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-bold">
-            <Coins className="h-5 w-5 text-gold-deep" /> Recent rounds
-          </h2>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {history.slice(0, 6).map((r, i) => (
-              <div key={r.id} className="relative overflow-hidden rounded-xl border hairline p-3.5">
-                <div className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-gold/10 blur-xl" />
-                <div className="relative flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold/25 to-gold/5 text-[11px] font-bold text-gold-deep">
-                    {r.winner ? initials(r.winner) : '—'}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-fg/85">
-                      {r.winner ?? 'No winner'}
-                      <span className="ml-1.5 font-normal text-fg/45">won the pot</span>
-                    </p>
-                    <p className="text-[11px] text-fg/35">
-                      {r.closedAt ? new Date(r.closedAt).toLocaleTimeString() : '—'} · {r.segments.length} players
-                    </p>
-                  </div>
-                  <span className="shrink-0 font-mono text-sm font-bold text-gold-deep">{fmtMoney(r.pot * 0.95)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
