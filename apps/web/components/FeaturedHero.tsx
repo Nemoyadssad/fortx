@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
-import { ChevronLeft, ChevronRight, Gamepad2, Gift, Radio } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Gamepad2, Gift, Radio, Bomb, Rocket, Layers, TrendingUp } from 'lucide-react';
 import { pct, fmtMoney } from '@/lib/format';
 import { api } from '@/lib/api';
 import type { EventItem, Market, Outcome } from '@/lib/types';
@@ -57,6 +57,43 @@ function FloatChips({ outcomes }: { outcomes: Outcome[] }) {
               {pct(o.price)}%
             </span>
           </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const CASINO_GAMES = [
+  { name: 'Mines', icon: Bomb, href: '/games/mines', color: '#b96cff' },
+  { name: 'Crash', icon: Rocket, href: '/games/crash', color: '#ff6ec7' },
+  { name: 'Tower', icon: Layers, href: '/games/tower', color: '#8a6cff' },
+  { name: 'Ladder', icon: TrendingUp, href: '/games/ladder', color: '#6f9bff' },
+];
+
+/** 2x2 grid of small game tiles for the casino promo card. */
+function GameTiles() {
+  return (
+    <div className="relative mt-4 grid grid-cols-2 gap-2">
+      {CASINO_GAMES.map((g) => {
+        const Icon = g.icon;
+        return (
+          <a
+            key={g.name}
+            href={g.href}
+            className="group/g relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/10 px-2.5 py-2 transition hover:border-white/25 hover:bg-black/[0.15]"
+          >
+            <div
+              className="pointer-events-none absolute -right-3 -top-3 h-10 w-10 rounded-full blur-xl transition group-hover/g:opacity-80"
+              style={{ background: g.color, opacity: 0.35 }}
+            />
+            <div
+              className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+              style={{ background: `${g.color}2a` }}
+            >
+              <Icon className="h-3.5 w-3.5" style={{ color: g.color }} />
+            </div>
+            <span className="relative truncate text-xs font-semibold text-fg/85">{g.name}</span>
+          </a>
         );
       })}
     </div>
@@ -176,6 +213,9 @@ export function FeaturedHero({
             <Gamepad2 className="h-7 w-7 text-[#b9a6ff]" />
             <h3 className="mt-3 font-display text-xl font-bold leading-tight">{t('home.casinoTitle')}</h3>
             <p className="mt-1 text-sm text-fg/55">Mines, Crash, Tower &amp; Ladder — fast, provably-fair rounds.</p>
+
+            <GameTiles />
+
             <a href="/games" className="mt-4 rounded-xl bg-gradient-to-b from-[#8a6cff] to-[#6f54e0] py-2.5 text-center font-bold text-white transition hover:brightness-110">{t('common.playNow')}</a>
           </div>
 
