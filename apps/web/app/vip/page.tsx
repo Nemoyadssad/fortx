@@ -94,6 +94,37 @@ function TierBadge({ color, active }: { color: string; active: boolean }) {
   );
 }
 
+/** Faint repeating diamond-quilt texture, matching the tier badges. */
+function QuiltPattern({ id, color, opacity = 0.5 }: { id: string; color: string; opacity?: number }) {
+  return (
+    <svg className="pointer-events-none absolute inset-0 h-full w-full" style={{ opacity }} preserveAspectRatio="none">
+      <defs>
+        <pattern id={id} width="42" height="42" patternUnits="userSpaceOnUse">
+          <path d="M0 21 L21 0 L42 21 L21 42 Z" fill="none" stroke={color} strokeWidth="1" opacity="0.4" />
+          <circle cx="21" cy="0" r="1.3" fill={color} opacity="0.6" />
+          <circle cx="0" cy="21" r="1.3" fill={color} opacity="0.6" />
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill={`url(#${id})`} />
+    </svg>
+  );
+}
+
+/** The seal-like crown centerpiece — the hero's one signature element. */
+function CrownMedallion() {
+  return (
+    <div className="relative mx-auto flex h-28 w-28 items-center justify-center">
+      <div className="absolute inset-0 rounded-full bg-gold/25 blur-2xl" />
+      <div className="absolute inset-0 animate-[spin_16s_linear_infinite] rounded-full border border-dashed border-gold/40" />
+      <div className="absolute inset-[7px] rounded-full border border-gold/25 bg-gradient-to-b from-gold/15 via-transparent to-transparent" />
+      <div className="relative flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-full border border-gold/50 bg-panel shadow-gold">
+        <QuiltPattern id="hero-medallion-quilt" color="#f5c542" opacity={0.35} />
+        <Crown className="relative h-8 w-8 text-gold-deep drop-shadow-[0_0_10px_rgba(245,197,66,0.55)]" strokeWidth={1.6} />
+      </div>
+    </div>
+  );
+}
+
 export default function VipPage() {
   const { email } = useAuth();
   const [vip, setVip] = useState<any | null>(null);
@@ -103,6 +134,8 @@ export default function VipPage() {
     api.vip().then(setVip).catch(() => {});
   }, [email]);
 
+  const currentTier = TIERS.find((t) => t.key === vip?.tier);
+
   return (
     <div className="mx-auto max-w-7xl px-5 py-10">
       <h1 className="font-display text-2xl font-bold">
@@ -110,53 +143,83 @@ export default function VipPage() {
       </h1>
 
       {/* hero */}
-      <div className="relative mt-4 overflow-hidden rounded-3xl border border-gold/20 bg-gradient-to-br from-[#3aa3ff]/10 via-panel2 to-panel p-8 text-center shadow-panel">
-        <div className="pointer-events-none absolute -left-10 top-0 h-40 w-40 rounded-full bg-gold/15 blur-3xl" />
-        <div className="pointer-events-none absolute -right-10 bottom-0 h-40 w-40 rounded-full bg-[#5ce1c0]/15 blur-3xl" />
-        <Crown className="mx-auto h-10 w-10 text-gold-deep" />
-        <h2 className="mt-3 font-display text-3xl font-bold">VIP perks</h2>
-        <p className="mx-auto mt-2 max-w-lg text-fg/60">
-          Earn cashback, rakeback, faster perks, birthday gifts, a bigger daily wheel and plenty
-          more privileges as you play.
-        </p>
+      <div className="relative mt-4 overflow-hidden rounded-3xl border border-gold/20 bg-panel p-8 text-center shadow-panel">
+        {/* ambient background */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#3aa3ff]/[0.07] via-transparent to-transparent" />
+        <QuiltPattern id="hero-bg-quilt" color="#f5c542" opacity={0.05} />
+        <div className="pointer-events-none absolute left-1/2 top-0 h-56 w-[32rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-16 bottom-0 h-40 w-40 rounded-full bg-[#5ce1c0]/10 blur-3xl" />
 
-        {email && vip ? (
-          <div className="mx-auto mt-6 max-w-md rounded-2xl border hairline bg-fg/[0.04] p-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-display font-bold" style={{ color: TIERS.find((t) => t.key === vip.tier)?.color }}>
-                {vip.tierName}
-              </span>
-              {vip.next && <span className="text-fg/45">Next: {vip.next.name}</span>}
-            </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-fg/[0.06]">
-              <div className="h-full rounded-full bg-gradient-to-r from-gold to-gold-soft" style={{ width: `${vip.progress}%` }} />
-            </div>
-            <p className="mt-2 text-xs text-fg/45">
-              Wagered {fmtMoney(vip.wagered)}
-              {vip.next ? ` · ${fmtMoney(vip.next.min)} to reach ${vip.next.name}` : ' · top tier reached'}
-            </p>
-          </div>
-        ) : (
-          <button
-            onClick={() => !email && window.dispatchEvent(new CustomEvent('predikt:auth'))}
-            className="mt-6 rounded-xl bg-gradient-to-b from-win to-[#1ea65a] px-8 py-3 font-bold text-black shadow-gold transition hover:brightness-105"
-          >
-            {email ? 'Loading…' : 'Register'}
-          </button>
-        )}
+        <div className="relative">
+          <CrownMedallion />
+          <h2 className="mt-4 font-display text-3xl font-bold">VIP perks</h2>
+          <p className="mx-auto mt-2 max-w-lg text-fg/60">
+            Earn cashback, rakeback, faster perks, birthday gifts, a bigger daily wheel and plenty
+            more privileges as you play.
+          </p>
 
-        <div className="mt-8">
-          <h3 className="font-display text-lg font-bold">How to join the club?</h3>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {STEPS.map((s, i) => {
-              const Icon = s.icon;
-              return (
-                <div key={i} className="flex items-center gap-3 rounded-2xl border hairline bg-fg/[0.02] px-4 py-3 text-left">
-                  <Icon className="h-5 w-5 shrink-0 text-gold-deep" />
-                  <span className="text-sm text-fg/75">{s.label}</span>
+          {email && vip ? (
+            <div className="mx-auto mt-6 max-w-md rounded-2xl border hairline bg-fg/[0.04] p-4 text-left">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                  style={{ background: `${currentTier?.color ?? '#f5c542'}22` }}
+                >
+                  <Crown className="h-4 w-4" style={{ color: currentTier?.color }} />
                 </div>
-              );
-            })}
+                <div className="flex flex-1 items-center justify-between text-sm">
+                  <span className="font-display font-bold" style={{ color: currentTier?.color }}>
+                    {vip.tierName}
+                  </span>
+                  {vip.next && <span className="text-fg/45">Next: {vip.next.name}</span>}
+                </div>
+              </div>
+
+              <div className="relative mt-3 h-2 overflow-hidden rounded-full bg-fg/[0.06]">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-gold to-gold-soft transition-[width]"
+                  style={{ width: `${vip.progress}%` }}
+                />
+                {/* threshold ticks for the remaining tiers */}
+                {TIERS.slice(1).map((t) => (
+                  <div key={t.key} className="absolute top-0 h-full w-px bg-panel/70" style={{ left: `${(t.min / (TIERS[TIERS.length - 1].min || 1)) * 100}%` }} />
+                ))}
+              </div>
+
+              <p className="mt-2 text-center text-xs text-fg/45">
+                Wagered {fmtMoney(vip.wagered)}
+                {vip.next ? ` · ${fmtMoney(vip.next.min)} to reach ${vip.next.name}` : ' · top tier reached'}
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={() => !email && window.dispatchEvent(new CustomEvent('predikt:auth'))}
+              className="mt-6 rounded-xl bg-gradient-to-b from-win to-[#1ea65a] px-8 py-3 font-bold text-black shadow-gold transition hover:brightness-105"
+            >
+              {email ? 'Loading…' : 'Register'}
+            </button>
+          )}
+
+          <div className="mt-9">
+            <h3 className="font-display text-lg font-bold">How to join the club?</h3>
+            <div className="relative mt-5 grid gap-3 sm:grid-cols-3">
+              {/* connecting line behind the steps, visible from sm breakpoint up */}
+              <div className="pointer-events-none absolute left-0 right-0 top-1/2 hidden h-px -translate-y-1/2 bg-gradient-to-r from-transparent via-gold/25 to-transparent sm:block" />
+              {STEPS.map((s, i) => {
+                const Icon = s.icon;
+                return (
+                  <div key={i} className="relative flex items-center gap-3 rounded-2xl border hairline bg-panel2/80 px-4 py-3 text-left backdrop-blur">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gold/25 bg-gold/10">
+                      <Icon className="h-4 w-4 text-gold-deep" />
+                    </div>
+                    <span className="text-sm text-fg/75">{s.label}</span>
+                    <span className="font-display absolute -top-2 right-3 text-[11px] font-bold text-gold-deep/50">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
