@@ -234,25 +234,18 @@ export class MinesService {
   }
 
   /** Recent finished rounds across all players for the live feed. */
+  /** Recent finished rounds across all players for the live feed. */
   async recent(take = 12) {
     const rounds = await this.prisma.gameRound.findMany({
       where: { game: 'MINES', status: { not: 'ACTIVE' } },
       orderBy: { endedAt: 'desc' },
       take,
-      include: { user: { select: { email: true, displayName: true } } },
     });
-    return rounds.map((r) => {
-      const name = r.user.displayName || r.user.email?.split('@')[0] || 'Player';
-      const masked = name.length > 4 ? `${name.slice(0, 4)}***` : name;
-      return {
-        id: r.id,
-        player: masked,
-        stake: r.stake.toString(),
-        mines: (r.config as any).mines as number,
-        multiplier: Number(r.multiplier),
-        payout: r.payout.toString(),
-        win: r.status === 'CASHED_OUT',
-      };
-    });
+    return rounds.map((r) => ({
+      id: r.id,
+      mines: (r.config as any).mines as number,
+      multiplier: Number(r.multiplier),
+      win: r.status === 'CASHED_OUT',
+    }));
   }
 }

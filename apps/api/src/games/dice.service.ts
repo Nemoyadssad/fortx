@@ -55,16 +55,14 @@ export class DiceService {
     return { roll, win, multiplier, payout, target, direction, winChance, serverSeedHash };
   }
 
-  async recent() {
+ async recent() {
     const rows = await this.prisma.gameRound.findMany({
       where: { game: 'DICE' },
       orderBy: { createdAt: 'desc' },
       take: 12,
-      select: { stake: true, payout: true, multiplier: true, state: true, createdAt: true },
+      select: { multiplier: true, state: true, createdAt: true },
     });
     return rows.map((r) => ({
-      stake: Number(r.stake),
-      payout: Number(r.payout),
       multiplier: Number(r.multiplier),
       roll: (r.state as any)?.roll ?? null,
       at: r.createdAt,

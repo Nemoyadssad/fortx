@@ -88,11 +88,9 @@ export class PlinkoService {
       where: { game: 'PLINKO' },
       orderBy: { createdAt: 'desc' },
       take: 12,
-      select: { stake: true, payout: true, multiplier: true, createdAt: true },
+      select: { multiplier: true, createdAt: true },
     });
     return rows.map((r) => ({
-      stake: Number(r.stake),
-      payout: Number(r.payout),
       multiplier: Number(r.multiplier),
       at: r.createdAt,
     }));

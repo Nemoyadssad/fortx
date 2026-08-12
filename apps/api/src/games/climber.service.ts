@@ -263,19 +263,11 @@ export class ClimberService {
       where: { game, status: { not: 'ACTIVE' } },
       orderBy: { endedAt: 'desc' },
       take,
-      include: { user: { select: { email: true, displayName: true } } },
     });
-    return rounds.map((r) => {
-      const name = r.user.displayName || r.user.email?.split('@')[0] || 'Player';
-      const masked = name.length > 4 ? `${name.slice(0, 4)}***` : name;
-      return {
-        id: r.id,
-        player: masked,
-        stake: r.stake.toString(),
-        multiplier: Number(r.multiplier),
-        payout: r.payout.toString(),
-        win: r.status === 'CASHED_OUT',
-      };
-    });
+    return rounds.map((r) => ({
+      id: r.id,
+      multiplier: Number(r.multiplier),
+      win: r.status === 'CASHED_OUT',
+    }));
   }
 }

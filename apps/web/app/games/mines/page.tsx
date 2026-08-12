@@ -353,25 +353,21 @@ export default function MinesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left font-mono text-[10px] uppercase tracking-widest text-fg/35">
-                <th className="px-5 py-2.5">Player</th>
-                <th className="px-5 py-2.5">Bet</th>
                 <th className="px-5 py-2.5">Mines</th>
                 <th className="px-5 py-2.5">Multiplier</th>
-                <th className="px-5 py-2.5 text-right">Payout</th>
+                <th className="px-5 py-2.5 text-right">Result</th>
               </tr>
             </thead>
             <tbody>
               {recent.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-6 text-center text-fg/35">
+                  <td colSpan={3} className="px-5 py-6 text-center text-fg/35">
                     No games yet. Be the first.
                   </td>
                 </tr>
               ) : (
                 recent.map((r) => (
                   <tr key={r.id} className="border-t hairline">
-                    <td className="px-5 py-3 text-fg/80">{r.player}</td>
-                    <td className="px-5 py-3 font-mono text-fg/60">{fmtMoney(r.stake)}</td>
                     <td className="px-5 py-3 text-fg/50">{r.mines}</td>
                     <td className="px-5 py-3 font-mono text-fg/60">x{r.multiplier.toFixed(2)}</td>
                     <td
@@ -379,7 +375,7 @@ export default function MinesPage() {
                         r.win ? 'text-win' : 'text-fg/30'
                       }`}
                     >
-                      {r.win ? fmtMoney(r.payout) : fmtMoney(0)}
+                      {r.win ? 'Win' : 'Bust'}
                     </td>
                   </tr>
                 ))
