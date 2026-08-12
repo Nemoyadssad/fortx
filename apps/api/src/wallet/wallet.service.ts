@@ -421,37 +421,34 @@ export class WalletService {
     });
   }
 
-  /** Sell an open bet back to the house at a discount (default 50 % of stake). */
   async sellBet(userId: string, betId: string): Promise<{ refund: string }> {
     const bet = await this.prisma.bet.findUnique({ where: { id: betId } });
     if (!bet) throw new NotFoundException('Bet not found.');
     if (bet.userId !== userId) throw new ForbiddenException('Not your bet.');
     if (bet.status !== BetStatus.OPEN) throw new BadRequestException('Only open bets can be sold.');
 
-    const refund = Number(bet.stake) * 0.5; // 50 % of stake returned
+    const refund = bet.stake.mul(0.5); // Decimal, без потери точности
 
     await this.prisma.$transaction(async (tx) => {
-      // mark bet SOLD + record settle time
-      await tx.bet.update({ where: { id: betId }, data: { status: BetStatus.SOLD, settledAt: new Date() } });
+      await tx.bet.update({
+        where: { id: betId },
+        data: { status: BetStatus.SOLD, settledAt: new Date() },
+      });
 
-      // release escrow → user cash
-      const escrow = await tx.ledgerAccount.findFirstOrThrow({ where: { type: AccountType.SYSTEM_ESCROW } });
-      const cash   = await tx.ledgerAccount.findFirstOrThrow({ where: { ownerId: userId, type: AccountType.USER_CASH } });
-      const house  = await tx.ledgerAccount.findFirstOrThrow({ where: { type: AccountType.SYSTEM_HOUSE } });
+      const escrow = await this.system(tx, AccountType.SYSTEM_ESCROW);
+      const cash = await this.userCash(tx, userId);
+      const house = await this.system(tx, AccountType.SYSTEM_HOUSE);
 
-      // log the transaction (split: refund to user, rest to house)
-      await tx.ledgerTransaction.create({
-        data: {
-          kind: TxnKind.BET_SETTLE_LOSS,
-          reference: `sell:${betId}`,
-          entries: {
-            create: [
-              { accountId: escrow.id, amount: -Number(bet.stake) }, // escrow releases full stake
-              { accountId: cash.id,   amount: refund },              // user gets 50 %
-              { accountId: house.id,  amount: Number(bet.stake) - refund }, // house keeps 50 %
-            ],
-          },
-        },
+      await this.ledger.postWithin(tx, {
+        kind: 'BET_SETTLE_LOSS',
+        reference: `sell:${betId}`,
+        idempotencyKey: `sell:${betId}`,
+        createdById: userId,
+        legs: [
+          { accountId: escrow.id, amount: bet.stake.negated() },
+          { accountId: cash.id, amount: refund },
+          { accountId: house.id, amount: bet.stake.sub(refund) },
+        ],
       });
     });
 

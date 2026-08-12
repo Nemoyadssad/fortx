@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountType, TxnKind } from '@prisma/client';
 import { createHmac, timingSafeEqual } from 'crypto';
+import { WalletService } from '../wallet/wallet.service';
+import { LedgerService } from '../ledger/ledger.service';
 
 const BASE = 'https://api.2328.io/api';
 const PROJECT_UUID = '99f31a9b-0c86-4d4a-8447-33139f688e6b';
@@ -25,6 +27,8 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly wallet: WalletService,
+    private readonly ledger: LedgerService,
   ) {}
 
   private get paymentApiKey(): string {
@@ -168,7 +172,11 @@ export class PaymentsService {
     return { ok: true };
   }
 
-  /** Create a payout (withdrawal) via 2328 */
+  /**
+   * Create a payout (withdrawal) via 2328.
+   * Деньги списываются с ledger ДО обращения к внешнему гейту.
+   * Если гейт отказал / упал по сети — деньги возвращаются пользователю.
+   */
   async createPayout(
     userId: string,
     amountUsd: number,
@@ -177,6 +185,19 @@ export class PaymentsService {
     network = 'TRX-TRC20',
   ) {
     if (!this.configured) throw new BadRequestException('Payment gateway not configured.');
+
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+      throw new BadRequestException('Amount must be a positive number.');
+    }
+    if (!toAddress || typeof toAddress !== 'string' || toAddress.length < 6) {
+      throw new BadRequestException('Invalid destination address.');
+    }
+
+    // 1) Списываем с баланса пользователя ПЕРЕД обращением к гейту.
+    const debitTxn = await this.wallet.withdraw(userId, amountUsd, {
+      actorId: userId,
+      reference: `2328-payout:${userId}:${Date.now()}`,
+    });
 
     const orderId = `fortx-payout-${userId}-${Date.now()}`;
     const payload = {
@@ -188,20 +209,50 @@ export class PaymentsService {
       fee_option: 'deduct',
     };
 
-    const body = JSON.stringify(payload);
-    const res = await fetch(`${BASE}/v1/payout`, {
-      method: 'POST',
-      headers: this.headers(body, true), // use payout key
-      body,
-    });
+    try {
+      const body = JSON.stringify(payload);
+      const res = await fetch(`${BASE}/v1/payout`, {
+        method: 'POST',
+        headers: this.headers(body, true),
+        body,
+      });
 
-    const data: any = await res.json().catch(() => ({}));
-    if (!res.ok || data?.state !== 0) {
-      this.logger.error('2328 payout error', data);
-      throw new BadRequestException(data?.message ?? 'Payout gateway error.');
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok || data?.state !== 0) {
+        this.logger.error('2328 payout error', data);
+        await this.refund(userId, amountUsd, debitTxn.id);
+        throw new BadRequestException(data?.message ?? 'Payout gateway error.');
+      }
+
+      return data.result;
+    } catch (err) {
+      if (!(err instanceof BadRequestException)) {
+        this.logger.error('2328 payout request failed', err);
+        await this.refund(userId, amountUsd, debitTxn.id);
+      }
+      throw err;
     }
+  }
 
-    return data.result;
+  /** Compensating transaction: return funds after a failed payout attempt. */
+  private async refund(userId: string, amountUsd: number, failedTxnId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const cash = await tx.ledgerAccount.findFirstOrThrow({
+        where: { ownerId: userId, type: AccountType.USER_CASH },
+      });
+      const wd = await tx.ledgerAccount.findFirstOrThrow({
+        where: { type: AccountType.SYSTEM_WITHDRAWALS },
+      });
+      await this.ledger.postWithin(tx, {
+        kind: TxnKind.BET_REFUND,
+        reference: `refund:${failedTxnId}`,
+        idempotencyKey: `refund:${failedTxnId}`,
+        legs: [
+          { accountId: wd.id, amount: -amountUsd },
+          { accountId: cash.id, amount: amountUsd },
+        ],
+      });
+    });
   }
 
   /** User's payment history */
