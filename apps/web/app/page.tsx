@@ -12,6 +12,7 @@ import { HomeDynamics } from '@/components/HomeDynamics';
 import { NewsRail } from '@/components/NewsRail';
 import { topicOf, TOPIC_NAMES } from '@/lib/topics';
 import { BetSlip } from '@/components/BetSlip';
+import { Advantages } from '@/components/advantages/advantages';
 
 type Selection = { event: EventItem; market: Market; outcome: Outcome };
 

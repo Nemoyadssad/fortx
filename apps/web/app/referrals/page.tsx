@@ -10,6 +10,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import { fmtMoney } from '@/lib/format';
+import { Advantages } from '@/components/advantages/advantages';
 
 const Shimmer = ({ children }: { children: ReactNode }) => (
   <span className="shimmer-gold bg-gradient-to-r from-[#b8881f] via-[#ffd766] to-[#b8881f] bg-clip-text text-transparent">{children}</span>
@@ -455,6 +456,11 @@ export default function ReferralsPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* advantages */}
+      <div className="-mx-5">
+        <Advantages />
       </div>
 
       {/* friends */}
