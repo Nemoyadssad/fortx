@@ -5,6 +5,7 @@ import { Bomb, Gem } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import { fmtMoney } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
 
 const GRID = 25;
 const MINE_OPTIONS = [1, 3, 5, 10];
@@ -17,13 +18,14 @@ interface ActiveRound {
 }
 
 const GAMES = [
-  { id: 'mines', label: 'Mines', active: true },
-  { id: 'crash', label: 'Crash', active: false },
-  { id: 'tower', label: 'Tower', active: false },
-  { id: 'ladder', label: 'Ladder', active: false },
+  { id: 'mines', active: true },
+  { id: 'crash', active: false },
+  { id: 'tower', active: false },
+  { id: 'ladder', active: false },
 ];
 
 export default function MinesPage() {
+  const { t } = useI18n();
   const { email, refreshBalance } = useAuth();
   const [stake, setStake] = useState(1);
   const [mines, setMines] = useState(3);
@@ -86,7 +88,7 @@ export default function MinesPage() {
       setNextMultiplier(r.nextMultiplier);
       await refreshBalance();
     } catch (e: any) {
-      setError(e?.message || 'Could not start the game');
+      setError(e?.message || t('mines.errStart'));
     } finally {
       setBusy(false);
     }
@@ -117,7 +119,7 @@ export default function MinesPage() {
         loadRecent();
       }
     } catch (e: any) {
-      setError(e?.message || 'Something went wrong');
+      setError(e?.message || t('mines.errGeneric'));
     } finally {
       setBusy(false);
     }
@@ -134,7 +136,7 @@ export default function MinesPage() {
       await refreshBalance();
       loadRecent();
     } catch (e: any) {
-      setError(e?.message || 'Could not cash out');
+      setError(e?.message || t('mines.errCashout'));
     } finally {
       setBusy(false);
     }
@@ -164,7 +166,7 @@ export default function MinesPage() {
               key={g.id}
               className="rounded-full border border-gold/50 bg-gold/10 px-4 py-1.5 text-sm font-semibold text-gold-deep"
             >
-              {g.label}
+              {t(`games.${g.id}`)}
             </span>
           ) : (
             <a
@@ -172,7 +174,7 @@ export default function MinesPage() {
               href={`/games/${g.id}`}
               className="rounded-full border border-fg/[0.06] px-4 py-1.5 text-sm text-fg/55 transition hover:border-gold/40 hover:text-fg"
             >
-              {g.label}
+              {t(`games.${g.id}`)}
             </a>
           ),
         )}
@@ -184,10 +186,8 @@ export default function MinesPage() {
             <Bomb className="h-5 w-5 text-lose" />
           </div>
           <div>
-            <h1 className="font-display text-lg font-bold">Mines</h1>
-            <p className="text-xs text-fg/45">
-              Flip tiles for gems. Avoid the mines. Cash out before you hit one.
-            </p>
+            <h1 className="font-display text-lg font-bold">{t('mines.title')}</h1>
+            <p className="text-xs text-fg/45">{t('mines.subtitle')}</p>
           </div>
         </div>
 
@@ -223,12 +223,12 @@ export default function MinesPage() {
           <div className="flex flex-col rounded-2xl border hairline bg-fg/[0.02] p-4">
             {!email ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-                <p className="text-sm text-fg/50">Sign in to play and claim $5 free.</p>
+                <p className="text-sm text-fg/50">{t('mines.signInPrompt')}</p>
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent('predikt:auth'))}
                   className="rounded-xl bg-gradient-to-b from-gold to-gold-soft px-5 py-2.5 font-bold text-black shadow-gold transition hover:brightness-105"
                 >
-                  Sign in
+                  {t('common.signin')}
                 </button>
               </div>
             ) : ended ? (
@@ -242,7 +242,7 @@ export default function MinesPage() {
                 >
                   {ended.won ? (
                     <>
-                      <p className="text-sm text-fg/60">You won</p>
+                      <p className="text-sm text-fg/60">{t('mines.youWon')}</p>
                       <p className="mt-1 font-display text-2xl font-bold text-win">
                         {fmtMoney(ended.payout ?? 0)}
                       </p>
@@ -252,8 +252,8 @@ export default function MinesPage() {
                     </>
                   ) : (
                     <>
-                      <p className="text-sm text-fg/60">Boom — you hit a mine</p>
-                      <p className="mt-1 font-display text-2xl font-bold text-lose">Busted</p>
+                      <p className="text-sm text-fg/60">{t('mines.boom')}</p>
+                      <p className="mt-1 font-display text-2xl font-bold text-lose">{t('mines.busted')}</p>
                     </>
                   )}
                 </div>
@@ -261,36 +261,36 @@ export default function MinesPage() {
                   onClick={reset}
                   className="mt-4 rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3 font-bold text-black shadow-gold transition hover:brightness-105"
                 >
-                  Play again
+                  {t('mines.playAgain')}
                 </button>
               </div>
             ) : active ? (
               <div className="flex flex-1 flex-col">
                 <div className="rounded-xl border border-gold/20 bg-gold/[0.06] p-4 text-center">
-                  <p className="text-xs text-fg/50">Current multiplier</p>
+                  <p className="text-xs text-fg/50">{t('mines.currentMultiplier')}</p>
                   <p className="font-display text-3xl font-bold text-gold-deep">
                     x{multiplier.toFixed(2)}
                   </p>
                   <p className="mt-1 font-mono text-[11px] text-fg/40">
-                    next tile x{nextMultiplier.toFixed(2)}
+                    {t('mines.nextTile')} x{nextMultiplier.toFixed(2)}
                   </p>
                 </div>
                 <p className="mt-4 text-center text-xs text-fg/40">
-                  {revealed.length} gem(s) · {mines} mines
+                  {revealed.length} {t('mines.gems')} · {mines} {t('mines.minesLower')}
                 </p>
                 <button
                   onClick={cashout}
                   disabled={busy || revealed.length === 0}
                   className="mt-auto rounded-xl bg-gradient-to-b from-win to-[#1ea65a] py-3.5 font-bold text-black shadow-gold transition hover:brightness-105 disabled:opacity-50"
                 >
-                  Cash out {fmtMoney(stake * multiplier)}
+                  {t('mines.cashOut')} {fmtMoney(stake * multiplier)}
                 </button>
                 {error && <p className="mt-2 text-center text-xs text-lose">{error}</p>}
               </div>
             ) : (
               <div className="flex flex-1 flex-col">
                 <label className="font-mono text-[10px] uppercase tracking-widest text-fg/40">
-                  Stake
+                  {t('mines.stake')}
                 </label>
                 <input
                   type="number"
@@ -312,7 +312,7 @@ export default function MinesPage() {
                 </div>
 
                 <label className="mt-5 font-mono text-[10px] uppercase tracking-widest text-fg/40">
-                  Mines
+                  {t('mines.mines')}
                 </label>
                 <div className="mt-2 grid grid-cols-4 gap-2">
                   {MINE_OPTIONS.map((m) => (
@@ -335,7 +335,7 @@ export default function MinesPage() {
                   disabled={busy}
                   className="mt-auto rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3.5 font-bold text-black shadow-gold transition hover:brightness-105 disabled:opacity-60"
                 >
-                  {busy ? 'Starting…' : `Bet ${fmtMoney(stake)}`}
+                  {busy ? t('mines.starting') : `${t('mines.bet')} ${fmtMoney(stake)}`}
                 </button>
                 {error && <p className="mt-2 text-center text-xs text-lose">{error}</p>}
               </div>
@@ -347,22 +347,22 @@ export default function MinesPage() {
       {/* live feed */}
       <div className="mt-6 rounded-2xl panel">
         <div className="border-b hairline px-5 py-3">
-          <h2 className="font-display text-sm font-semibold text-fg/80">Latest games</h2>
+          <h2 className="font-display text-sm font-semibold text-fg/80">{t('mines.latestGames')}</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left font-mono text-[10px] uppercase tracking-widest text-fg/35">
-                <th className="px-5 py-2.5">Mines</th>
-                <th className="px-5 py-2.5">Multiplier</th>
-                <th className="px-5 py-2.5 text-right">Result</th>
+                <th className="px-5 py-2.5">{t('mines.mines')}</th>
+                <th className="px-5 py-2.5">{t('mines.multiplierCol')}</th>
+                <th className="px-5 py-2.5 text-right">{t('mines.resultCol')}</th>
               </tr>
             </thead>
             <tbody>
               {recent.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="px-5 py-6 text-center text-fg/35">
-                    No games yet. Be the first.
+                    {t('mines.noGames')}
                   </td>
                 </tr>
               ) : (
@@ -375,7 +375,7 @@ export default function MinesPage() {
                         r.win ? 'text-win' : 'text-fg/30'
                       }`}
                     >
-                      {r.win ? 'Win' : 'Bust'}
+                      {r.win ? t('mines.win') : t('mines.bust')}
                     </td>
                   </tr>
                 ))
