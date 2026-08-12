@@ -117,10 +117,10 @@ function RocketArt() {
       src={rocketUrl}
       alt=""
       aria-hidden="true"
-      className="pointer-events-none absolute -right-3 -top-3 z-0 h-[150px] w-[175px] object-cover object-right-top opacity-90 mix-blend-lighten sm:h-[168px] sm:w-[195px]"
+      className="pointer-events-none absolute -right-6 -top-6 z-0 h-[210px] w-[240px] object-cover object-right-top opacity-95 mix-blend-lighten sm:h-[240px] sm:w-[270px]"
       style={{
-        WebkitMaskImage: 'linear-gradient(200deg, black 45%, transparent 88%)',
-        maskImage: 'linear-gradient(200deg, black 45%, transparent 88%)',
+        WebkitMaskImage: 'linear-gradient(205deg, black 55%, transparent 92%)',
+        maskImage: 'linear-gradient(205deg, black 55%, transparent 92%)',
       }}
     />
   );
@@ -133,7 +133,7 @@ function GiftArt() {
       src={giftBoxUrl}
       alt=""
       aria-hidden="true"
-      className="pointer-events-none absolute -bottom-6 -right-8 h-[190px] w-[220px] object-contain object-bottom mix-blend-lighten opacity-95 sm:h-[220px] sm:w-[250px]"
+      className="pointer-events-none absolute -bottom-8 -right-10 h-[230px] w-[260px] object-contain object-bottom mix-blend-lighten opacity-95 sm:h-[260px] sm:w-[290px]"
     />
   );
 }
@@ -249,7 +249,7 @@ export function FeaturedHero({
           {/* CASINO PROMO — dark card, rocket bleeding off the right edge */}
           <a
             href="/games"
-            className="group/casino relative flex min-w-0 flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#0d0b16] p-6 shadow-panel transition hover:border-white/20"
+            className="group/casino relative flex min-w-0 min-h-[300px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#0d0b16] p-6 shadow-panel transition hover:border-white/20"
           >
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#1a1330] via-[#0d0b16] to-[#0d0b16]" />
             <div className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full bg-[#7c5cff]/25 blur-3xl" />
@@ -274,7 +274,7 @@ export function FeaturedHero({
           </a>
 
           {/* BONUS PROMO — gold card, gift box bleeding off the right edge */}
-          <div className="relative flex min-w-0 flex-col overflow-hidden rounded-3xl border border-gold/20 bg-[#0d0b16] p-6">
+          <div className="relative flex min-w-0 min-h-[220px] flex-col overflow-hidden rounded-3xl border border-gold/20 bg-[#0d0b16] p-6">
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#231d10] via-[#0d0b16] to-[#0d0b16]" />
             <div className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full bg-gold/20 blur-3xl" />
 
