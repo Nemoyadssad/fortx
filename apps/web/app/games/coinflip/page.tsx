@@ -22,6 +22,9 @@ export default function CoinflipPage() {
   const [flipToken, setFlipToken] = useState(0);
   const rotRef = useRef(0);
 
+  const normalized = ((rotation % 360) + 360) % 360;
+const showingHeads = normalized < 90 || normalized > 270;
+
   const phase: 'idle' | 'flipping' | 'result' = flipping ? 'flipping' : res && !res.error ? 'result' : 'idle';
 
   // Rotate the coin at rest to visually face the chosen side.
@@ -125,10 +128,11 @@ export default function CoinflipPage() {
         <CoinScene flipping={flipping} phase={phase} win={res?.win ?? null} flipToken={flipToken} />
 
         <div
-          className="relative h-36 w-36"
-          style={{
-            transformStyle: 'preserve-3d',
-            transform: `rotateY(${rotation}deg)`,
+  className="relative h-36 w-36"
+  style={{
+    transformStyle: 'preserve-3d',
+    WebkitTransformStyle: 'preserve-3d',
+    transform: `rotateY(${rotation}deg)`,
             transition: flipping
               ? 'transform 2.1s cubic-bezier(0.2,0.7,0.15,1)'
               : 'transform 0.5s cubic-bezier(0.4,0.2,0.2,1)',
@@ -142,29 +146,35 @@ export default function CoinflipPage() {
 
           {/* heads face */}
           <div
-            className="absolute inset-0 flex items-center justify-center rounded-full font-display text-4xl font-bold text-black ring-2 ring-gold-deep/50"
-            style={{
-              backfaceVisibility: 'hidden',
-              transform: 'translateZ(5px)',
-              background:
-                'radial-gradient(circle at 32% 28%, #fff3cf 0%, #f5c542 38%, #cf9e2b 70%, #8a6a1a 100%)',
-              boxShadow: 'inset 0 0 18px rgba(255,255,255,0.35), inset 0 -10px 20px rgba(0,0,0,0.25)',
-            }}
-          >
+  className="absolute inset-0 flex items-center justify-center rounded-full font-display text-4xl font-bold text-black ring-2 ring-gold-deep/50"
+  style={{
+    backfaceVisibility: 'hidden',
+    WebkitBackfaceVisibility: 'hidden',
+    transform: 'translateZ(5px)',
+    opacity: flipping ? undefined : showingHeads ? 1 : 0,
+    transition: 'opacity 0.15s linear',
+    background:
+      'radial-gradient(circle at 32% 28%, #fff3cf 0%, #f5c542 38%, #cf9e2b 70%, #8a6a1a 100%)',
+    boxShadow: 'inset 0 0 18px rgba(255,255,255,0.35), inset 0 -10px 20px rgba(0,0,0,0.25)',
+  }}
+>
             <span className="drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]">👑</span>
           </div>
 
           {/* tails face */}
           <div
-            className="absolute inset-0 flex items-center justify-center rounded-full font-display text-4xl font-bold text-black ring-2 ring-black/20"
-            style={{
-              backfaceVisibility: 'hidden',
-              transform: 'rotateY(180deg) translateZ(5px)',
-              background:
-                'radial-gradient(circle at 32% 28%, #f4f5f8 0%, #c8c8d0 40%, #8f8f98 72%, #55555c 100%)',
-              boxShadow: 'inset 0 0 18px rgba(255,255,255,0.4), inset 0 -10px 20px rgba(0,0,0,0.25)',
-            }}
-          >
+  className="absolute inset-0 flex items-center justify-center rounded-full font-display text-4xl font-bold text-black ring-2 ring-black/20"
+  style={{
+    backfaceVisibility: 'hidden',
+    WebkitBackfaceVisibility: 'hidden',
+    transform: 'rotateY(180deg) translateZ(5px)',
+    opacity: flipping ? undefined : showingHeads ? 0 : 1,
+    transition: 'opacity 0.15s linear',
+    background:
+      'radial-gradient(circle at 32% 28%, #f4f5f8 0%, #c8c8d0 40%, #8f8f98 72%, #55555c 100%)',
+    boxShadow: 'inset 0 0 18px rgba(255,255,255,0.4), inset 0 -10px 20px rgba(0,0,0,0.25)',
+  }}
+>
             <span className="drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]">✦</span>
           </div>
         </div>
