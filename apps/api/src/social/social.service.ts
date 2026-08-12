@@ -73,28 +73,30 @@ export class SocialService {
     }
 
     const ids = Object.keys(profit);
-    if (ids.length === 0) return { window, type, rows: [] as any[] };
+if (ids.length === 0) return { window, type, rows: [] as any[] };
 
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, displayName: true, email: true },
-    });
-    const umap = new Map(users.map((u) => [u.id, u]));
+const users = await this.prisma.user.findMany({
+  where: { id: { in: ids }, role: 'USER' },   // ← добавлено: role: 'USER'
+  select: { id: true, displayName: true, email: true },
+});
+const umap = new Map(users.map((u) => [u.id, u]));
 
-    let rows = ids.map((id) => {
-      const w = wins[id] ?? 0;
-      const l = losses[id] ?? 0;
-      const settled = w + l;
-      return {
-        id,
-        name: pubName(umap.get(id)),
-        profit: r2(profit[id] ?? 0),
-        wins: w,
-        losses: l,
-        settled,
-        winRate: settled > 0 ? Math.round((w / settled) * 100) : null,
-      };
-    });
+let rows = ids
+  .filter((id) => umap.has(id))               // ← добавлено: убираем всех, кого отсеял фильтр выше
+  .map((id) => {
+    const w = wins[id] ?? 0;
+    const l = losses[id] ?? 0;
+    const settled = w + l;
+    return {
+      id,
+      name: pubName(umap.get(id)),
+      profit: r2(profit[id] ?? 0),
+      wins: w,
+      losses: l,
+      settled,
+      winRate: settled > 0 ? Math.round((w / settled) * 100) : null,
+    };
+  });
 
     // forecaster board requires at least one settled prediction
     if (type === 'forecasters') rows = rows.filter((r) => r.settled > 0);
