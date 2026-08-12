@@ -165,7 +165,7 @@ export default function CoinflipPage() {
               boxShadow: 'inset 0 0 18px rgba(255,255,255,0.4), inset 0 -10px 20px rgba(0,0,0,0.25)',
             }}
           >
-            <span>✦</span>
+            <span className="drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]">✦</span>
           </div>
         </div>
       </div>
