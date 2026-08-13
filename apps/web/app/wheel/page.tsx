@@ -1,13 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { Gift, Clock } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import { fmtMoney } from '@/lib/format';
-import wheelBg from './wheel1.png';
 
 const R = 150;
 const CX = 160;
@@ -28,19 +26,111 @@ function slicePath(i: number, n: number) {
   return `M ${CX} ${CY} L ${p0.x.toFixed(1)} ${p0.y.toFixed(1)} A ${R} ${R} 0 0 1 ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} Z`;
 }
 
+// --- background shards ----------------------------------------------------
+
+type Shard = {
+  left: number;
+  top: number;
+  size: number;
+  rot: number;
+  opacity: number;
+  blur: number;
+};
+
+function makeShards(count: number, seed = 1): Shard[] {
+  let s = seed;
+  const rand = () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+  const shards: Shard[] = [];
+  for (let i = 0; i < count; i++) {
+    const angle = rand() * Math.PI * 2;
+    const dist = 20 + rand() * 46;
+    const left = 50 + Math.cos(angle) * dist;
+    const top = 50 + Math.sin(angle) * dist;
+    shards.push({
+      left: Math.max(1, Math.min(99, left)),
+      top: Math.max(1, Math.min(99, top)),
+      size: 8 + rand() * 20,
+      rot: rand() * 360,
+      opacity: 0.4 + rand() * 0.5,
+      blur: rand() > 0.65 ? 1 + rand() * 2 : 0,
+    });
+  }
+  return shards;
+}
+
+// centered on the wheel itself, not the whole viewport
 function WheelBackdrop() {
+  const shards = useMemo(() => makeShards(28, 7), []);
+
   return (
-    <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-black">
-      <Image
-        src={wheelBg}
-        alt=""
-        fill
-        priority
-        className="object-cover"
+    <div
+      className="pointer-events-none absolute left-1/2 top-1/2 -z-10 -translate-x-1/2 -translate-y-1/2"
+      style={{ width: '130vmax', height: '130vmax' }}
+    >
+      {/* bright core glow right behind the wheel */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(circle at 50% 50%, rgba(245,197,66,0.28) 0%, rgba(180,130,20,0.16) 8%, rgba(60,44,10,0.08) 16%, transparent 26%)',
+        }}
+      />
+
+      {/* diagonal light rays, brighter + tighter like the reference */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(245,197,66,0.12) 4deg, transparent 12deg, transparent 88deg, rgba(245,197,66,0.10) 92deg, transparent 100deg, transparent 178deg, rgba(245,197,66,0.12) 182deg, transparent 190deg, transparent 268deg, rgba(245,197,66,0.10) 272deg, transparent 280deg, transparent 360deg)',
+          mixBlendMode: 'screen',
+        }}
+      />
+
+      {/* faint concentric ring */}
+      <svg
+        className="absolute left-1/2 top-1/2 h-[46vmax] w-[46vmax] -translate-x-1/2 -translate-y-1/2 opacity-[0.10]"
+        viewBox="0 0 400 400"
+      >
+        <circle cx="200" cy="200" r="190" fill="none" stroke="#f5c542" strokeWidth="0.5" />
+        <circle cx="200" cy="200" r="130" fill="none" stroke="#f5c542" strokeWidth="0.5" />
+        <circle cx="200" cy="200" r="70" fill="none" stroke="#f5c542" strokeWidth="0.5" />
+      </svg>
+
+      {/* scattered gold shards */}
+      {shards.map((s, i) => (
+        <div
+          key={i}
+          className="absolute rounded-[2px]"
+          style={{
+            left: `${s.left}%`,
+            top: `${s.top}%`,
+            width: s.size,
+            height: s.size * 1.3,
+            transform: `translate(-50%, -50%) rotate(${s.rot}deg)`,
+            background: 'linear-gradient(135deg, #fff3c4, #f5c542 45%, #a9791f)',
+            opacity: s.opacity,
+            filter: s.blur ? `blur(${s.blur}px)` : undefined,
+            boxShadow: '0 0 10px rgba(245,197,66,0.45)',
+          }}
+        />
+      ))}
+
+      {/* sparkle dust */}
+      <div
+        className="absolute inset-0 opacity-[0.2]"
+        style={{
+          backgroundImage:
+            'radial-gradient(1.5px 1.5px at 20% 30%, #f5c542 100%, transparent 100%), radial-gradient(1.5px 1.5px at 70% 60%, #f5c542 100%, transparent 100%), radial-gradient(1.5px 1.5px at 40% 80%, #f5c542 100%, transparent 100%), radial-gradient(1.5px 1.5px at 85% 20%, #f5c542 100%, transparent 100%), radial-gradient(1.5px 1.5px at 10% 65%, #f5c542 100%, transparent 100%), radial-gradient(1.5px 1.5px at 60% 15%, #f5c542 100%, transparent 100%), radial-gradient(1.5px 1.5px at 30% 55%, #f5c542 100%, transparent 100%)',
+        }}
       />
     </div>
   );
 }
+
+// --- page ----------------------------------------------------------------
 
 export default function WheelPage() {
   const { t } = useI18n();
@@ -126,9 +216,7 @@ export default function WheelPage() {
   const n = segments.length;
 
   return (
-    <>
-      <WheelBackdrop />
-
+    <div className="relative min-h-screen overflow-hidden bg-black">
       <div className="relative mx-auto max-w-2xl px-5 py-12 text-center">
         <h1 className="font-display text-3xl font-bold">
           <span className="gold-text">{t('wheel.title')}</span>
@@ -136,6 +224,9 @@ export default function WheelPage() {
         <p className="mt-2 text-fg/55">Spin once a day for free cash. Good luck!</p>
 
         <div className="relative mx-auto mt-10 aspect-square w-full max-w-[340px]">
+          {/* backdrop lives here, centered exactly on the wheel */}
+          <WheelBackdrop />
+
           <div className="absolute left-1/2 top-[-6px] z-10 -translate-x-1/2">
             <div
               className="h-0 w-0 border-x-[12px] border-t-[20px] border-x-transparent"
@@ -145,13 +236,14 @@ export default function WheelPage() {
 
           <svg
             viewBox="0 0 320 320"
-            className="h-full w-full"
+            className="relative h-full w-full"
             style={{
               transform: `rotate(${rotation}deg)`,
               transition: spinning ? 'transform 4.2s cubic-bezier(0.17,0.67,0.16,0.99)' : 'none',
+              filter: 'drop-shadow(0 0 18px rgba(245,197,66,0.45))',
             }}
           >
-            <circle cx={CX} cy={CY} r={R + 6} fill="rgb(var(--bg))" stroke="rgba(245,197,66,0.4)" strokeWidth="3" />
+            <circle cx={CX} cy={CY} r={R + 6} fill="rgb(var(--bg))" stroke="rgba(245,197,66,0.6)" strokeWidth="3" />
             {segments.map((amt, i) => {
               const seg = 360 / n;
               const mid = i * seg + seg / 2;
@@ -174,7 +266,7 @@ export default function WheelPage() {
                 </g>
               );
             })}
-            <circle cx={CX} cy={CY} r="26" fill="rgb(var(--panel))" stroke="rgba(245,197,66,0.5)" strokeWidth="2" />
+            <circle cx={CX} cy={CY} r="26" fill="rgb(var(--panel))" stroke="rgba(245,197,66,0.7)" strokeWidth="2" />
           </svg>
         </div>
 
@@ -218,6 +310,6 @@ export default function WheelPage() {
           One free spin every 24 hours. Prizes are credited instantly. 18+. Play responsibly.
         </p>
       </div>
-    </>
+    </div>
   );
 }
