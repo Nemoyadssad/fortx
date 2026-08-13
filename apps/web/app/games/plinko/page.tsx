@@ -86,13 +86,16 @@ export default function PlinkoPage() {
     pendingRef.current = new Map();
     setExpectedCount(ballCount);
 
-    // fire every ball's bet in parallel — sequential awaits were the real
-    // source of the long wait (N round-trips back to back instead of 1)
+    // Sequential, not Promise.all — parallel requests all try to lock the
+    // same wallet row in the DB at once, which causes contention and some
+    // requests to time out / fail with 500 when ballCount is high (5/10/25).
     const stagger = staggerFor(ballCount);
     try {
-      const responses = await Promise.all(
-        Array.from({ length: ballCount }, () => api.games.plinkoPlay(stake, rows, risk)),
-      );
+      const responses: any[] = [];
+      for (let i = 0; i < ballCount; i++) {
+        const r = await api.games.plinkoPlay(stake, rows, risk);
+        responses.push(r);
+      }
       const newDrops: PlinkoDrop[] = responses.map((r, i) => {
         const id = ++idCounter.current;
         pendingRef.current.set(id, { id, bucket: r.bucket, multiplier: r.multiplier, payout: r.payout });
@@ -102,6 +105,7 @@ export default function PlinkoPage() {
       setDrops(newDrops);
     } catch (e: any) {
       setDropping(false);
+      console.error('plinko drop failed:', e);
     }
   }
 
