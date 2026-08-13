@@ -174,7 +174,7 @@ export function AuthModal({ open, onClose }: { open: boolean; onClose: () => voi
           </div>
 
           <button
-            onClick={() => setNotice('Google sign-in will switch on once the OAuth keys are added.')}
+            onClick={() => setNotice('Google registration will be working again soon. Thanks for your patience! ❤️')}
             className="flex w-full items-center justify-center gap-2 rounded-xl border hairline bg-fg/[0.04] py-3 text-sm font-semibold transition hover:bg-fg/[0.07]"
           >
             <GoogleMark /> Google
