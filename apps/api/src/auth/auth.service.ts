@@ -56,18 +56,20 @@ export class AuthService {
     await this.wallet.grantWelcomeBonus(user.id, this.settings.welcomeBonus());
 
     if (referrer && referrer.id !== user.id) {
-      // Boosted welcome for the friend + signup reward for the referrer.
+      // Реферал (приглашённый) всё ещё получает усиленный welcome-бонус за регистрацию по ссылке.
+      // Реферер БОЛЬШЕ НЕ получает мгновенный фиксированный бонус здесь — его заработок теперь
+      // начисляется как % от депозитов реферала (см. ReferralsService.myStatus) и выплачивается
+      // только через модерацию заявки на вывод. Начисление фиксированного бонуса тут же привело бы
+      // к двойной оплате реферера сверх этого механизма.
       const refereeBonus = this.settings.refereeSignup();
-      const referrerBonus = this.settings.referrerSignup();
       await this.wallet.adminAdjust(user.id, refereeBonus, user.id, 'Referral welcome boost');
-      await this.wallet.adminAdjust(referrer.id, referrerBonus, referrer.id, 'Referral signup bonus');
       await this.prisma.auditLog.create({
         data: {
           actorId: user.id,
           action: 'REFERRAL_SIGNUP',
           targetType: 'User',
           targetId: referrer.id,
-          metadata: { referrerId: referrer.id, refereeBonus, referrerBonus },
+          metadata: { referrerId: referrer.id, refereeBonus },
         },
       });
     }
@@ -130,6 +132,7 @@ export class AuthService {
     }
     return this.issueToken(user);
   }
+
   async loginWithTelegram(initData: string) {
     const botToken = this.config.getOrThrow<string>('TELEGRAM_BOT_TOKEN');
 
