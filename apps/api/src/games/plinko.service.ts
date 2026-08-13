@@ -91,57 +91,70 @@ export class PlinkoService {
     }
 
     const mults = multipliers(rows, risk, this.settings.edge('plinko'));
-    const results: {
+
+    // --- Phase 1: compute every ball's outcome in memory. No DB calls here,
+    // so this is microseconds even for 25 balls at 16 rows. ---
+    type Round = {
       path: string; bucket: number; multiplier: number; payout: number; win: boolean;
-      serverSeedHash: string;
-    }[] = [];
+      serverSeed: string; serverSeedHash: string;
+    };
+    const rounds: Round[] = [];
+    let totalPayout = 0;
 
-    await this.prisma.$transaction(
-      async (tx) => {
-        for (let n = 0; n < count; n++) {
-          const serverSeed = randomBytes(16).toString('hex');
-          const serverSeedHash = createHash('sha256').update(serverSeed).digest('hex');
+    for (let n = 0; n < count; n++) {
+      const serverSeed = randomBytes(16).toString('hex');
+      const serverSeedHash = createHash('sha256').update(serverSeed).digest('hex');
 
-          let path = '';
-          let bucket = 0;
-          for (let i = 0; i < rows; i++) {
-            const right = randomInt(0, 2);
-            path += right ? 'R' : 'L';
-            bucket += right;
-          }
-          const multiplier = mults[bucket];
-          const payout = +(stake * multiplier).toFixed(2);
-          const win = payout > stake;
+      let path = '';
+      let bucket = 0;
+      for (let i = 0; i < rows; i++) {
+        const right = randomInt(0, 2);
+        path += right ? 'R' : 'L';
+        bucket += right;
+      }
+      const multiplier = mults[bucket];
+      const payout = +(stake * multiplier).toFixed(2);
+      const win = payout > stake;
+      totalPayout = +(totalPayout + payout).toFixed(2);
 
-          await this.wallet.gameStakeWithin(tx, userId, stake, 'plinko');
-          if (payout > 0) await this.wallet.gamePayoutWithin(tx, userId, payout, 'plinko');
-          await tx.gameRound.create({
-            data: {
-              userId,
-              game: 'PLINKO',
-              stake: new Prisma.Decimal(stake),
-              status: win ? 'CASHED_OUT' : 'BUST',
-              multiplier: new Prisma.Decimal(multiplier),
-              payout: new Prisma.Decimal(payout),
-              serverSeed,
-              serverSeedHash,
-              config: { rows, risk },
-              state: { path, bucket },
-              endedAt: new Date(),
-            },
-          });
+      rounds.push({ path, bucket, multiplier, payout, win, serverSeed, serverSeedHash });
+    }
 
-          results.push({ path, bucket, multiplier, payout, win, serverSeedHash });
-        }
-      },
-      // Default Prisma interactive-transaction timeout is 5000ms. With up to 25
-      // balls, each doing 2 wallet calls + 1 insert, that limit was being hit
-      // under real DB latency -> P2028 "Transaction already closed" -> 500 on
-      // /plinko/play-batch, which is why the drop just reset on the frontend.
-      { timeout: 20000, maxWait: 10000 },
-    );
+    // --- Phase 2: exactly 2-3 DB round-trips total, regardless of `count`. ---
+    // Previously this looped `count` times doing gameStakeWithin +
+    // gamePayoutWithin + gameRound.create per ball (each of which itself does
+    // 2-3 queries), so a 25-ball drop meant 150+ sequential queries inside one
+    // transaction -> blew past Prisma's transaction timeout -> 500 on
+    // /plinko/play-batch, which is why the drop just reset on the frontend.
+    const endedAt = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await this.wallet.gameStakeBatchWithin(tx, userId, stake, count, 'plinko');
+      if (totalPayout > 0) await this.wallet.gamePayoutBatchWithin(tx, userId, totalPayout, 'plinko');
+      await tx.gameRound.createMany({
+        data: rounds.map((r) => ({
+          userId,
+          game: 'PLINKO' as const,
+          stake: new Prisma.Decimal(stake),
+          status: r.win ? ('CASHED_OUT' as const) : ('BUST' as const),
+          multiplier: new Prisma.Decimal(r.multiplier),
+          payout: new Prisma.Decimal(r.payout),
+          serverSeed: r.serverSeed,
+          serverSeedHash: r.serverSeedHash,
+          config: { rows, risk },
+          state: { path: r.path, bucket: r.bucket },
+          endedAt,
+        })),
+      });
+    });
 
-    return { results, multipliers: mults, rows, risk };
+    return {
+      results: rounds.map(({ path, bucket, multiplier, payout, win, serverSeedHash }) => ({
+        path, bucket, multiplier, payout, win, serverSeedHash,
+      })),
+      multipliers: mults,
+      rows,
+      risk,
+    };
   }
 
   async recent() {

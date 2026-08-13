@@ -146,6 +146,70 @@ export class WalletService {
     });
   }
 
+  /**
+   * Batch version of gameStakeWithin: validates a single bet's size (same rules
+   * as gameStakeWithin) but moves the *total* of `count` bets in ONE ledger
+   * post instead of `count` separate ones. Used by multi-round plays (e.g.
+   * Plinko's play-batch) so an N-ball drop costs a constant number of DB
+   * round-trips instead of O(N) — avoids blowing the transaction timeout.
+   */
+  async gameStakeBatchWithin(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    perBetAmount: Prisma.Decimal.Value,
+    count: number,
+    reference: string,
+  ) {
+    const per = new Prisma.Decimal(perBetAmount);
+    if (per.lte(0)) throw new BadRequestException('Stake must be positive.');
+    if (!Number.isInteger(count) || count < 1) throw new BadRequestException('Invalid bet count.');
+    const game = reference.split(':')[0];
+    if (!this.settings.gameEnabled(game)) throw new BadRequestException('This game is currently disabled.');
+    if (game !== 'case') {
+      const n = per.toNumber();
+      const min = this.settings.minStake();
+      const max = this.settings.maxStake();
+      if (n < min || n > max) throw new BadRequestException(`Stake must be between ${min} and ${max}.`);
+    }
+    const total = per.mul(count);
+    const cash = await this.userCash(tx, userId);
+    const house = await this.system(tx, AccountType.SYSTEM_HOUSE);
+    return this.ledger.postWithin(tx, {
+      kind: 'GAME_STAKE',
+      reference,
+      createdById: userId,
+      legs: [
+        { accountId: cash.id, amount: total.negated() },
+        { accountId: house.id, amount: total },
+      ],
+    });
+  }
+
+  /**
+   * Batch version of gamePayoutWithin: pays out the combined winnings of a
+   * multi-round play in ONE ledger post. See gameStakeBatchWithin.
+   */
+  async gamePayoutBatchWithin(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    totalAmount: Prisma.Decimal.Value,
+    reference: string,
+  ) {
+    const amt = new Prisma.Decimal(totalAmount);
+    if (amt.lte(0)) return null;
+    const cash = await this.userCash(tx, userId);
+    const house = await this.system(tx, AccountType.SYSTEM_HOUSE);
+    return this.ledger.postWithin(tx, {
+      kind: 'GAME_PAYOUT',
+      reference,
+      createdById: userId,
+      legs: [
+        { accountId: house.id, amount: amt.negated() },
+        { accountId: cash.id, amount: amt },
+      ],
+    });
+  }
+
   private async userCash(tx: Prisma.TransactionClient, userId: string, currency = 'USD') {
     return tx.ledgerAccount.findUniqueOrThrow({
       where: { ownerId_type_currency: { ownerId: userId, type: AccountType.USER_CASH, currency } },
