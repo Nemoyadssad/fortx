@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LineChart, Gamepad2, Trophy, CalendarDays, Gift, Disc3, Crown, Users, Wallet, User,
   HelpCircle, LifeBuoy, FileText, ShieldCheck, History, Shield, LogOut, X, Package, Palette,
+  Dices, Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/app/providers';
 import { ThemeToggle } from './ThemeToggle';
@@ -15,6 +16,7 @@ type Item = {
   icon: any;
   accent?: 'gold' | 'win';
   event?: string;
+  eventDetail?: string;
   adminOnly?: boolean;
   emoji?: string;
   badge?: string;
@@ -26,6 +28,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
     items: [
       { href: '/', label: 'Markets', icon: LineChart },
       { href: '/games', label: 'Games', icon: Gamepad2 },
+      { label: 'Slots', icon: Dices, event: 'predikt:comingsoon', eventDetail: 'Slots', badge: 'SOON' },
       { href: '/leaderboard', label: 'Leaderboard', icon: Trophy, accent: 'gold' },
       { href: '/calendar', label: 'Calendar', icon: CalendarDays },
     ],
@@ -65,6 +68,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { email, role, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const [comingSoonLabel, setComingSoonLabel] = useState<string | null>(null);
   const isAdmin = role === 'ADMIN' || role === 'SUPERADMIN';
 
   useEffect(() => {
@@ -74,6 +78,15 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => { setOpen(false); }, [pathname]);
+
+  useEffect(() => {
+    const onComingSoon = (e: Event) => {
+      const detail = (e as CustomEvent).detail as string | undefined;
+      setComingSoonLabel(detail || 'This feature');
+    };
+    window.addEventListener('predikt:comingsoon', onComingSoon);
+    return () => window.removeEventListener('predikt:comingsoon', onComingSoon);
+  }, []);
 
   const isActive = (href?: string) => {
     if (!href) return false;
@@ -164,7 +177,7 @@ export function Sidebar() {
                           key={it.label}
                           onClick={() => {
                             setOpen(false);
-                            window.dispatchEvent(new CustomEvent(it.event!));
+                            window.dispatchEvent(new CustomEvent(it.event!, { detail: it.eventDetail }));
                           }}
                           className={baseClass + ' text-left'}
                         >
@@ -210,6 +223,44 @@ export function Sidebar() {
           <p className="mt-2 px-3 text-center text-[10px] text-fg/25">Play money only · 18+</p>
         </div>
       </aside>
+
+      {/* Coming Soon modal — inlined, no separate component */}
+      {comingSoonLabel && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => setComingSoonLabel(null)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-2xl border hairline bg-panel p-6 text-center shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setComingSoonLabel(null)}
+              className="absolute right-3 top-3 rounded-lg p-1.5 text-fg/50 hover:text-fg"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold/15">
+              <Sparkles className="h-7 w-7 text-gold-deep" />
+            </div>
+
+            <h3 className="font-display text-lg font-bold text-fg">
+              {comingSoonLabel} — Coming Soon
+            </h3>
+            <p className="mt-2 text-sm text-fg/60">
+              Мы уже готовим {comingSoonLabel.toLowerCase()}. Загляните позже — скоро будет доступно!
+            </p>
+
+            <button
+              onClick={() => setComingSoonLabel(null)}
+              className="mt-5 w-full rounded-xl bg-gradient-to-b from-gold to-gold-soft py-2.5 text-sm font-bold text-black shadow-gold transition hover:brightness-105"
+            >
+              Понятно
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
