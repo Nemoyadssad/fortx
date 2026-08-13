@@ -10,8 +10,8 @@ import { fmtMoney } from '@/lib/format';
 const R = 150;
 const CX = 160;
 const CY = 160;
-// alternating premium segment colors: deep navy / rich gold-bronze
-const SEGMENT_COLORS = ['#141a2e', '#2b2210'];
+// deep emerald / rich gold-bronze — premium casino palette
+const SEGMENT_COLORS = ['#0f2418', '#2b1f08'];
 
 function point(angleDeg: number, radius: number) {
   const a = (angleDeg * Math.PI) / 180;
@@ -27,23 +27,28 @@ function slicePath(i: number, n: number) {
   return `M ${CX} ${CY} L ${p0.x.toFixed(1)} ${p0.y.toFixed(1)} A ${R} ${R} 0 0 1 ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} Z`;
 }
 
-// small light pegs around the rim, like a real casino wheel
-function RimPegs({ n = 24 }: { n?: number }) {
+// keep label upright regardless of position on the wheel
+function labelRotation(mid: number) {
+  const norm = ((mid % 360) + 360) % 360;
+  return norm > 90 && norm < 270 ? mid + 180 : mid;
+}
+
+function RimPegs({ n = 28 }: { n?: number }) {
   const pegs = Array.from({ length: n });
   return (
     <>
       {pegs.map((_, i) => {
         const angle = (360 / n) * i;
-        const p = point(angle, R + 14);
+        const p = point(angle, R + 15);
         return (
           <circle
             key={i}
             cx={p.x}
             cy={p.y}
-            r="2.6"
+            r="3"
             fill="url(#pegGradient)"
-            stroke="rgba(255,236,170,0.9)"
-            strokeWidth="0.5"
+            stroke="#fff8dc"
+            strokeWidth="0.4"
           />
         );
       })}
@@ -145,24 +150,24 @@ export default function WheelPage() {
         <div className="relative mx-auto mt-14 aspect-square w-full max-w-[380px]">
           {/* ambient glow behind the wheel */}
           <div
-            className="pointer-events-none absolute inset-[-20%] -z-10"
+            className="pointer-events-none absolute inset-[-22%] -z-10"
             style={{
               background:
-                'radial-gradient(circle, rgba(245,197,66,0.22) 0%, rgba(245,197,66,0.08) 35%, transparent 65%)',
+                'radial-gradient(circle, rgba(245,197,66,0.28) 0%, rgba(245,197,66,0.10) 35%, transparent 65%)',
             }}
           />
 
           {/* pointer */}
-          <div className="absolute left-1/2 top-[-14px] z-20 -translate-x-1/2">
-            <svg width="28" height="34" viewBox="0 0 28 34" style={{ filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.6))' }}>
+          <div className="absolute left-1/2 top-[-16px] z-20 -translate-x-1/2">
+            <svg width="30" height="36" viewBox="0 0 28 34" style={{ filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.7))' }}>
               <defs>
                 <linearGradient id="pointerGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#fff3c4" />
-                  <stop offset="55%" stopColor="#f5c542" />
-                  <stop offset="100%" stopColor="#a9791f" />
+                  <stop offset="0%" stopColor="#fff9e0" />
+                  <stop offset="45%" stopColor="#f5c542" />
+                  <stop offset="100%" stopColor="#96700f" />
                 </linearGradient>
               </defs>
-              <path d="M14 34 L2 6 Q14 -4 26 6 Z" fill="url(#pointerGrad)" stroke="#7a5613" strokeWidth="0.75" />
+              <path d="M14 34 L2 6 Q14 -4 26 6 Z" fill="url(#pointerGrad)" stroke="#5e410c" strokeWidth="0.75" />
             </svg>
           </div>
 
@@ -172,76 +177,72 @@ export default function WheelPage() {
             style={{
               transform: `rotate(${rotation}deg)`,
               transition: spinning ? 'transform 4.4s cubic-bezier(0.15,0.65,0.1,1)' : 'none',
-              filter: 'drop-shadow(0 8px 30px rgba(0,0,0,0.7))',
+              filter: 'drop-shadow(0 10px 34px rgba(0,0,0,0.75))',
             }}
           >
             <defs>
-              {/* metallic outer bezel */}
               <linearGradient id="bezelGrad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#fff3c4" />
-                <stop offset="25%" stopColor="#f5c542" />
-                <stop offset="50%" stopColor="#a9791f" />
+                <stop offset="0%" stopColor="#fff9e0" />
+                <stop offset="20%" stopColor="#f5c542" />
+                <stop offset="45%" stopColor="#96700f" />
+                <stop offset="55%" stopColor="#c99a2e" />
                 <stop offset="75%" stopColor="#f5c542" />
-                <stop offset="100%" stopColor="#7a5613" />
+                <stop offset="100%" stopColor="#6b4c0c" />
               </linearGradient>
 
-              {/* glossy peg gradient */}
               <radialGradient id="pegGradient" cx="35%" cy="30%" r="70%">
-                <stop offset="0%" stopColor="#fffbe6" />
-                <stop offset="60%" stopColor="#f5c542" />
-                <stop offset="100%" stopColor="#a9791f" />
+                <stop offset="0%" stopColor="#fffdf0" />
+                <stop offset="55%" stopColor="#f5c542" />
+                <stop offset="100%" stopColor="#8a640f" />
               </radialGradient>
 
-              {/* center hub metallic gradient */}
-              <radialGradient id="hubGrad" cx="35%" cy="30%" r="75%">
-                <stop offset="0%" stopColor="#3a3f55" />
-                <stop offset="55%" stopColor="#181c2c" />
-                <stop offset="100%" stopColor="#05060c" />
+              <radialGradient id="hubGrad" cx="32%" cy="28%" r="80%">
+                <stop offset="0%" stopColor="#3d4560" />
+                <stop offset="45%" stopColor="#171a2a" />
+                <stop offset="100%" stopColor="#040509" />
               </radialGradient>
 
-              {/* subtle glossy sheen over whole wheel */}
-              <radialGradient id="sheenGrad" cx="35%" cy="20%" r="70%">
-                <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
-                <stop offset="40%" stopColor="rgba(255,255,255,0.04)" />
+              <radialGradient id="sheenGrad" cx="32%" cy="18%" r="75%">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
+                <stop offset="35%" stopColor="rgba(255,255,255,0.05)" />
                 <stop offset="100%" stopColor="rgba(255,255,255,0)" />
               </radialGradient>
 
-              {/* per-segment subtle radial shading for depth */}
-              <radialGradient id="segShade" cx="50%" cy="100%" r="100%">
-                <stop offset="0%" stopColor="rgba(0,0,0,0.35)" />
+              <radialGradient id="segShade" cx="50%" cy="100%" r="105%">
+                <stop offset="0%" stopColor="rgba(0,0,0,0.4)" />
                 <stop offset="70%" stopColor="rgba(0,0,0,0)" />
               </radialGradient>
             </defs>
 
-            {/* outer metallic bezel ring */}
-            <circle cx={CX} cy={CY} r={R + 18} fill="url(#bezelGrad)" />
-            <circle cx={CX} cy={CY} r={R + 12} fill="#05060c" />
+            {/* metallic bezel */}
+            <circle cx={CX} cy={CY} r={R + 20} fill="url(#bezelGrad)" />
+            <circle cx={CX} cy={CY} r={R + 20} fill="none" stroke="rgba(0,0,0,0.4)" strokeWidth="1" />
+            <circle cx={CX} cy={CY} r={R + 13} fill="#050608" />
 
-            {/* rim light pegs */}
-            <RimPegs n={24} />
+            <RimPegs n={28} />
 
-            {/* segments */}
-            <circle cx={CX} cy={CY} r={R + 4} fill="#05060c" stroke="#7a5613" strokeWidth="2" />
+            {/* wheel face */}
+            <circle cx={CX} cy={CY} r={R + 4} fill="#050608" stroke="#c99a2e" strokeWidth="2" />
             {segments.map((amt, i) => {
               const seg = 360 / n;
               const mid = i * seg + seg / 2;
-              const lp = point(mid, R * 0.64);
+              const lp = point(mid, R * 0.62);
               return (
                 <g key={i}>
                   <path d={slicePath(i, n)} fill={SEGMENT_COLORS[i % 2]} />
                   <path d={slicePath(i, n)} fill="url(#segShade)" />
-                  <path d={slicePath(i, n)} fill="none" stroke="rgba(245,197,66,0.45)" strokeWidth="1" />
+                  <path d={slicePath(i, n)} fill="none" stroke="rgba(245,197,66,0.5)" strokeWidth="1" />
                   <text
                     x={lp.x}
                     y={lp.y}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    transform={`rotate(${mid} ${lp.x} ${lp.y})`}
-                    fill="#f5c542"
+                    transform={`rotate(${labelRotation(mid)} ${lp.x} ${lp.y})`}
+                    fill="#f8d878"
                     className="font-mono"
-                    fontSize="17"
+                    fontSize="18"
                     fontWeight="800"
-                    style={{ filter: 'drop-shadow(0 0 4px rgba(245,197,66,0.5))' }}
+                    style={{ filter: 'drop-shadow(0 0 5px rgba(245,197,66,0.6))' }}
                   >
                     {amt}
                   </text>
@@ -249,7 +250,6 @@ export default function WheelPage() {
               );
             })}
 
-            {/* thin gold spokes */}
             {segments.map((_, i) => {
               const seg = 360 / n;
               const a0 = i * seg;
@@ -261,18 +261,18 @@ export default function WheelPage() {
                   y1={CY}
                   x2={p0.x}
                   y2={p0.y}
-                  stroke="rgba(245,197,66,0.5)"
-                  strokeWidth="1.25"
+                  stroke="rgba(245,197,66,0.55)"
+                  strokeWidth="1.5"
                 />
               );
             })}
 
-            {/* overall glossy sheen */}
             <circle cx={CX} cy={CY} r={R + 4} fill="url(#sheenGrad)" />
 
             {/* center hub */}
-            <circle cx={CX} cy={CY} r="30" fill="url(#hubGrad)" stroke="url(#bezelGrad)" strokeWidth="3" />
-            <circle cx={CX} cy={CY} r="30" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+            <circle cx={CX} cy={CY} r="32" fill="url(#bezelGrad)" />
+            <circle cx={CX} cy={CY} r="27" fill="url(#hubGrad)" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+            <circle cx={CX} cy={CY} r="8" fill="none" stroke="rgba(245,197,66,0.6)" strokeWidth="1" />
           </svg>
         </div>
 
