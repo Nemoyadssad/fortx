@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { BetStatus, ReferralWithdrawalStatus } from '@prisma/client';
+import { ReferralWithdrawalStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { SettingsService } from '../settings/settings.service';
@@ -69,21 +69,42 @@ export class ReferralsService {
     return out;
   }
 
-  private async lossByUsers(ids: string[]): Promise<Record<string, number>> {
+  /**
+   * Считаем сумму депозитов для каждого юзера.
+   * Депозит = LedgerTransaction с kind=DEPOSIT,
+   * положительная запись на USER_CASH аккаунте пользователя.
+   */
+  private async depositsByUsers(ids: string[]): Promise<Record<string, number>> {
     if (ids.length === 0) return {};
-    const [g, betStake, betWon, betRefund] = await Promise.all([
-      this.prisma.gameRound.groupBy({ by: ['userId'], _sum: { stake: true, payout: true }, where: { userId: { in: ids } } }),
-      this.prisma.bet.groupBy({ by: ['userId'], _sum: { stake: true }, where: { userId: { in: ids }, status: { in: [BetStatus.WON, BetStatus.LOST, BetStatus.REFUNDED] } } }),
-      this.prisma.bet.groupBy({ by: ['userId'], _sum: { potentialPayout: true }, where: { userId: { in: ids }, status: BetStatus.WON } }),
-      this.prisma.bet.groupBy({ by: ['userId'], _sum: { stake: true }, where: { userId: { in: ids }, status: BetStatus.REFUNDED } }),
-    ]);
-    const loss: Record<string, number> = {};
-    const add = (id: string, v: number) => { loss[id] = (loss[id] ?? 0) + v; };
-    for (const r of g) add(r.userId, Number(r._sum.stake ?? 0) - Number(r._sum.payout ?? 0));
-    for (const r of betStake) add(r.userId, Number(r._sum.stake ?? 0));
-    for (const r of betWon) add(r.userId, -Number(r._sum.potentialPayout ?? 0));
-    for (const r of betRefund) add(r.userId, -Number(r._sum.stake ?? 0));
-    return loss;
+
+    // Находим USER_CASH аккаунты всех рефералов
+    const accounts = await this.prisma.ledgerAccount.findMany({
+      where: { ownerId: { in: ids }, type: 'USER_CASH' },
+      select: { id: true, ownerId: true },
+    });
+
+    if (accounts.length === 0) return {};
+
+    const accountToUser: Record<string, string> = {};
+    for (const a of accounts) accountToUser[a.id] = a.ownerId!;
+
+    // Суммируем положительные entries от DEPOSIT транзакций
+    const entries = await this.prisma.ledgerEntry.groupBy({
+      by: ['accountId'],
+      _sum: { amount: true },
+      where: {
+        accountId: { in: accounts.map((a) => a.id) },
+        amount: { gt: 0 },
+        transaction: { kind: 'DEPOSIT' },
+      },
+    });
+
+    const out: Record<string, number> = {};
+    for (const e of entries) {
+      const userId = accountToUser[e.accountId];
+      if (userId) out[userId] = (out[userId] ?? 0) + Number(e._sum.amount ?? 0);
+    }
+    return out;
   }
 
   /** Уже реально выплачено (одобренные заявки на вывод). */
@@ -121,23 +142,31 @@ export class ReferralsService {
       orderBy: { createdAt: 'desc' },
     });
     const ids = refs.map((r) => r.id);
-    const [wmap, lmap] = await Promise.all([this.wageredByUsers(ids), this.lossByUsers(ids)]);
+
+    // Теперь считаем от депозитов, а не от проигрыша
+    const [wmap, dmap] = await Promise.all([
+      this.wageredByUsers(ids),
+      this.depositsByUsers(ids),
+    ]);
+
     const rate = tierRate(refs.length);
 
     let totalWagered = 0;
-    let totalLost = 0;
+    let totalDeposited = 0;
     let earnedFromReferrals = 0;
+
     const friends = refs.map((r) => {
       const w = wmap[r.id] ?? 0;
-      const lost = Math.max(0, lmap[r.id] ?? 0);
-      const e = Math.round(lost * rate * 100) / 100;
+      const deposited = dmap[r.id] ?? 0;
+      // Реферер получает % от суммы депозитов реферала
+      const e = Math.round(deposited * rate * 100) / 100;
       totalWagered += w;
-      totalLost += lost;
+      totalDeposited += deposited;
       earnedFromReferrals += e;
       return {
         email: maskEmail(r.email),
         wagered: Math.round(w),
-        lost: Math.round(lost * 100) / 100,
+        deposited: Math.round(deposited * 100) / 100,
         earned: e,
         joinedAt: r.createdAt,
       };
@@ -157,7 +186,7 @@ export class ReferralsService {
       code,
       referrals: refs.length,
       totalWagered: Math.round(totalWagered),
-      totalLost: Math.round(totalLost * 100) / 100,
+      totalDeposited: Math.round(totalDeposited * 100) / 100,
       rate,
       ratePct: Math.round(rate * 100),
       earned,
