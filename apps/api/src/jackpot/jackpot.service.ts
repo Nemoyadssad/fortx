@@ -26,7 +26,7 @@ export class JackpotService {
       where: { status: 'OPEN' },
       include: {
         entries: {
-          include: { user: { select: { id: true, email: true, displayName: true } } },
+          include: { user: { select: { id: true, email: true, displayName: true, role: true } } },
           orderBy: { createdAt: 'asc' },
         },
       },
@@ -36,8 +36,8 @@ export class JackpotService {
       const lastClosed = await this.prisma.jackpotRound.findFirst({
         where: { status: 'CLOSED' },
         include: {
-          entries: { include: { user: { select: { id: true, email: true, displayName: true } } } },
-          winner: { select: { id: true, email: true, displayName: true } },
+          entries: { include: { user: { select: { id: true, email: true, displayName: true, role: true } } } },
+          winner: { select: { id: true, email: true, displayName: true, role: true } },
         },
         orderBy: { closedAt: 'desc' },
       });
@@ -57,13 +57,16 @@ export class JackpotService {
     const rounds = await this.prisma.jackpotRound.findMany({
       where: { status: 'CLOSED' },
       include: {
-        winner: { select: { id: true, email: true, displayName: true } },
-        entries: { include: { user: { select: { id: true, email: true, displayName: true } } } },
+        winner: { select: { id: true, email: true, displayName: true, role: true } },
+        entries: { include: { user: { select: { id: true, email: true, displayName: true, role: true } } } },
       },
       orderBy: { closedAt: 'desc' },
-      take,
+      take: take + 5,
     });
-    return rounds.map((r: any) => this.serialize(r));
+    return rounds
+      .filter((r: any) => !r.winner || !this.isAdmin(r.winner.role))
+      .slice(0, take)
+      .map((r: any) => this.serialize(r));
   }
 /** Get one specific round by id, whatever its status — used by the client
    *  to reliably poll the outcome of the round it's animating, without
@@ -72,8 +75,8 @@ export class JackpotService {
     const round = await this.prisma.jackpotRound.findUnique({
       where: { id },
       include: {
-        entries: { include: { user: { select: { id: true, email: true, displayName: true } } } },
-        winner: { select: { id: true, email: true, displayName: true } },
+        entries: { include: { user: { select: { id: true, email: true, displayName: true, role: true } } } },
+        winner: { select: { id: true, email: true, displayName: true, role: true } },
       },
     });
     if (!round) return null;
@@ -231,8 +234,14 @@ export class JackpotService {
     return (n.slice(0, 2) || 'pl') + '***';
   }
 
+  private isAdmin(role?: string | null) {
+    return role === 'ADMIN' || role === 'SUPERADMIN';
+  }
+
   private serialize(round: any) {
-    const entries = (round.entries ?? []).map((e: any) => ({
+    const visibleEntries = (round.entries ?? []).filter((e: any) => !this.isAdmin(e.user?.role));
+
+    const entries = visibleEntries.map((e: any) => ({
       id: e.id,
       userId: e.userId,
       name: this.maskName(e.user),
@@ -245,13 +254,16 @@ export class JackpotService {
       ...e,
       pct: total > 0 ? +((e.amount / total) * 100).toFixed(1) : 0,
     }));
+
+    const winnerIsAdmin = round.winner && this.isAdmin(round.winner.role);
+
     return {
       id: round.id,
       status: round.status,
       pot,
       segments,
-      winnerId: round.winnerId ?? null,
-      winner: round.winner ? this.maskName(round.winner) : null,
+      winnerId: winnerIsAdmin ? null : (round.winnerId ?? null),
+      winner: winnerIsAdmin ? null : (round.winner ? this.maskName(round.winner) : null),
       seed: round.status === 'CLOSED' ? round.seed : null,
       createdAt: round.createdAt,
       closedAt: round.closedAt ?? null,
