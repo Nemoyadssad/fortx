@@ -23,7 +23,11 @@ export class CrashService {
   private genCrashPoint(stake = 0): number {
     const r = randomInt(1, 1_000_000) / 1_000_000; // (0,1)
     const rig = this.settings.highStakeWinChance('crash', stake);
-    if (rig < 1 && Math.random() >= rig) return 1; // rigged instant crash
+    // Use the same CSPRNG as everywhere else for this decision instead of
+    // Math.random() — it's not cryptographically secure and shouldn't be the
+    // thing deciding whether a round is instantly rigged to crash.
+    const rigRoll = randomInt(1, 1_000_000) / 1_000_000;
+    if (rig < 1 && rigRoll >= rig) return 1; // rigged instant crash
     const cp = this.settings.edge('crash') / (1 - r);
     return cp < 1 ? 1 : +cp.toFixed(2);
   }
@@ -78,6 +82,14 @@ export class CrashService {
    * Live status poll. Returns the current server multiplier while flying, and
    * settles + reveals the crash once the curve passes the secret crash point.
    * The crash point is never disclosed before it actually happens.
+   *
+   * Settlement here is done via a *conditional* update (`status: 'ACTIVE'` in
+   * the WHERE clause). This is what makes it safe to run concurrently with
+   * `cashout()`: whichever of the two requests reaches the row first "wins"
+   * the settlement and the other backs off instead of blindly overwriting it.
+   * Without this guard, a poll landing right after a successful cashout could
+   * clobber the round back to BUST/payout:0 even though the player was
+   * already paid — a real money/state mismatch, not just a display glitch.
    */
   async state(userId: string, roundId: string) {
     const round = await this.loadOwned(userId, roundId);
@@ -94,8 +106,8 @@ export class CrashService {
     const serverM = this.curve(elapsedSec);
 
     if (serverM >= crashPoint) {
-      await this.prisma.gameRound.update({
-        where: { id: round.id },
+      const { count } = await this.prisma.gameRound.updateMany({
+        where: { id: round.id, status: 'ACTIVE' },
         data: {
           status: 'BUST',
           multiplier: new Prisma.Decimal(crashPoint),
@@ -103,12 +115,27 @@ export class CrashService {
           endedAt: new Date(),
         },
       });
+
+      if (count === 0) {
+        // A concurrent cashout() already settled this round first — report
+        // what actually happened instead of the bust we almost wrote.
+        const fresh = await this.loadOwned(userId, roundId);
+        if (fresh.status === 'CASHED_OUT') {
+          return { status: 'cashed', multiplier: Number(fresh.multiplier), crashPoint };
+        }
+      }
       return { status: 'crashed', multiplier: crashPoint, crashPoint, serverSeed: round.serverSeed };
     }
 
     return { status: 'flying', multiplier: serverM };
   }
 
+  /**
+   * Same conditional-update guard as state() — see the comment there. Both
+   * the bust-write and the win-write below only apply if the round is still
+   * ACTIVE at the moment we touch the DB; if it isn't, someone else already
+   * settled it and we report that outcome instead of double-processing it.
+   */
   async cashout(userId: string, roundId: string, clientMultiplier?: number) {
     const round = await this.loadOwned(userId, roundId);
     const crashPoint = (round.state as any).crashPoint as number;
@@ -120,7 +147,7 @@ export class CrashService {
       return {
         cashedOut: true,
         multiplier: Number(round.multiplier),
-        payout: round.payout.toString(),
+        payout: round.payout!.toString(),
         crashPoint,
         serverSeed: round.serverSeed,
       };
@@ -140,8 +167,8 @@ export class CrashService {
     }
 
     if (m >= crashPoint) {
-      await this.prisma.gameRound.update({
-        where: { id: round.id },
+      const { count } = await this.prisma.gameRound.updateMany({
+        where: { id: round.id, status: 'ACTIVE' },
         data: {
           status: 'BUST',
           multiplier: new Prisma.Decimal(crashPoint),
@@ -149,14 +176,30 @@ export class CrashService {
           endedAt: new Date(),
         },
       });
+
+      if (count === 0) {
+        // Round was already settled (e.g. the player cashed out from another
+        // tab/request a moment earlier). Report the real outcome, don't bust it.
+        const fresh = await this.loadOwned(userId, roundId);
+        if (fresh.status === 'CASHED_OUT') {
+          return {
+            cashedOut: true,
+            multiplier: Number(fresh.multiplier),
+            payout: fresh.payout!.toString(),
+            crashPoint,
+            serverSeed: fresh.serverSeed,
+          };
+        }
+      }
       return { bust: true, crashPoint, serverSeed: round.serverSeed };
     }
 
     const payout = round.stake.mul(m);
+    let settled = false;
+
     await this.prisma.$transaction(async (tx) => {
-      await this.wallet.gamePayoutWithin(tx, userId, payout, round.id);
-      await tx.gameRound.update({
-        where: { id: round.id },
+      const { count } = await tx.gameRound.updateMany({
+        where: { id: round.id, status: 'ACTIVE' },
         data: {
           status: 'CASHED_OUT',
           multiplier: new Prisma.Decimal(m),
@@ -164,7 +207,25 @@ export class CrashService {
           endedAt: new Date(),
         },
       });
+      if (count === 0) return; // already settled elsewhere — never pay out twice
+      await this.wallet.gamePayoutWithin(tx, userId, payout, round.id);
+      settled = true;
     });
+
+    if (!settled) {
+      const fresh = await this.loadOwned(userId, roundId);
+      if (fresh.status === 'BUST') {
+        return { bust: true, crashPoint, serverSeed: fresh.serverSeed };
+      }
+      return {
+        cashedOut: true,
+        multiplier: Number(fresh.multiplier),
+        payout: fresh.payout!.toString(),
+        crashPoint,
+        serverSeed: fresh.serverSeed,
+      };
+    }
+
     return {
       cashedOut: true,
       multiplier: m,
