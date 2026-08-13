@@ -16,6 +16,7 @@ import {
   StartMinesDto,
   PlayDiceDto,
   PlayPlinkoDto,
+  PlayPlinkoBatchDto,
   PlayRouletteDto,
   PlayCoinflipDto,
 } from './dto';
@@ -135,6 +136,10 @@ export class GamesController {
   @Post('plinko/play')
   plinkoPlay(@Req() req: any, @Body() dto: PlayPlinkoDto) {
     return this.plinko.play(req.user.id, dto.stake, dto.rows, dto.risk);
+  }
+  @Post('plinko/play-batch')
+  plinkoPlayBatch(@Req() req: any, @Body() dto: PlayPlinkoBatchDto) {
+    return this.plinko.playBatch(req.user.id, dto.count, dto.stake, dto.rows, dto.risk);
   }
   @Public()
   @Get('plinko/recent')

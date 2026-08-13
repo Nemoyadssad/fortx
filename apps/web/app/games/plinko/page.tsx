@@ -86,17 +86,14 @@ export default function PlinkoPage() {
     pendingRef.current = new Map();
     setExpectedCount(ballCount);
 
-    // Sequential, not Promise.all — parallel requests all try to lock the
-    // same wallet row in the DB at once, which causes contention and some
-    // requests to time out / fail with 500 when ballCount is high (5/10/25).
     const stagger = staggerFor(ballCount);
     try {
-      const responses: any[] = [];
-      for (let i = 0; i < ballCount; i++) {
-        const r = await api.games.plinkoPlay(stake, rows, risk);
-        responses.push(r);
-      }
-      const newDrops: PlinkoDrop[] = responses.map((r, i) => {
+      const res =
+        ballCount === 1
+          ? { results: [await api.games.plinkoPlay(stake, rows, risk)] }
+          : await api.games.plinkoPlayBatch(ballCount, stake, rows, risk);
+
+      const newDrops: PlinkoDrop[] = res.results.map((r: any, i: number) => {
         const id = ++idCounter.current;
         pendingRef.current.set(id, { id, bucket: r.bucket, multiplier: r.multiplier, payout: r.payout });
         return { id, path: r.path, multiplier: r.multiplier, startDelay: i * stagger };

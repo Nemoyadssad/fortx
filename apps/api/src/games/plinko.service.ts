@@ -83,6 +83,60 @@ export class PlinkoService {
     return { path, bucket, multiplier, multipliers: mults, payout, win, rows, risk, serverSeedHash };
   }
 
+  async playBatch(userId: string, count: number, stake: number, rows: number, risk: 'low' | 'medium' | 'high') {
+  if (!Number.isFinite(stake) || stake <= 0) throw new BadRequestException('Stake must be positive.');
+  if (![8, 12, 16].includes(rows)) throw new BadRequestException('Rows must be 8, 12 or 16.');
+  if (!Number.isInteger(count) || count < 1 || count > 25) {
+    throw new BadRequestException('Ball count must be between 1 and 25.');
+  }
+
+  const mults = multipliers(rows, risk, this.settings.edge('plinko'));
+  const results: {
+    path: string; bucket: number; multiplier: number; payout: number; win: boolean;
+    serverSeedHash: string;
+  }[] = [];
+
+  await this.prisma.$transaction(async (tx) => {
+    for (let n = 0; n < count; n++) {
+      const serverSeed = randomBytes(16).toString('hex');
+      const serverSeedHash = createHash('sha256').update(serverSeed).digest('hex');
+
+      let path = '';
+      let bucket = 0;
+      for (let i = 0; i < rows; i++) {
+        const right = randomInt(0, 2);
+        path += right ? 'R' : 'L';
+        bucket += right;
+      }
+      const multiplier = mults[bucket];
+      const payout = +(stake * multiplier).toFixed(2);
+      const win = payout > stake;
+
+      await this.wallet.gameStakeWithin(tx, userId, stake, 'plinko');
+      if (payout > 0) await this.wallet.gamePayoutWithin(tx, userId, payout, 'plinko');
+      await tx.gameRound.create({
+        data: {
+          userId,
+          game: 'PLINKO',
+          stake: new Prisma.Decimal(stake),
+          status: win ? 'CASHED_OUT' : 'BUST',
+          multiplier: new Prisma.Decimal(multiplier),
+          payout: new Prisma.Decimal(payout),
+          serverSeed,
+          serverSeedHash,
+          config: { rows, risk },
+          state: { path, bucket },
+          endedAt: new Date(),
+        },
+      });
+
+      results.push({ path, bucket, multiplier, payout, win, serverSeedHash });
+    }
+  });
+
+  return { results, multipliers: mults, rows, risk };
+}
+
   async recent() {
     const rows = await this.prisma.gameRound.findMany({
       where: { game: 'PLINKO' },

@@ -242,7 +242,9 @@ export const api = {
       req('/games/dice/play', { method: 'POST', body: JSON.stringify({ stake, target, direction }) }),
     diceRecent: () => req('/games/dice/recent'),
     plinkoPlay: (stake: number, rows: number, risk: 'low' | 'medium' | 'high') =>
-      req('/games/plinko/play', { method: 'POST', body: JSON.stringify({ stake, rows, risk }) }),
+  req('/games/plinko/play', { method: 'POST', body: JSON.stringify({ stake, rows, risk }) }),
+    plinkoPlayBatch: (count: number, stake: number, rows: number, risk: 'low' | 'medium' | 'high') =>
+  req('/games/plinko/play-batch', { method: 'POST', body: JSON.stringify({ count, stake, rows, risk }) }),
     plinkoRecent: () => req('/games/plinko/recent'),
     roulettePlay: (stake: number, betType: string, betValue: string) =>
       req('/games/roulette/play', { method: 'POST', body: JSON.stringify({ stake, betType, betValue }) }),

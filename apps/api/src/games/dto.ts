@@ -73,3 +73,10 @@ export class PlayCoinflipDto {
   @IsNumber() @IsPositive() stake!: number;
   @IsIn(['heads', 'tails']) side!: 'heads' | 'tails';
 }
+
+export class PlayPlinkoBatchDto {
+  @IsInt() @Min(1) @Max(25) count!: number;
+  @IsNumber() @IsPositive() stake!: number;
+  @IsIn([8, 12, 16]) rows!: number;
+  @IsIn(['low', 'medium', 'high']) risk!: 'low' | 'medium' | 'high';
+}
