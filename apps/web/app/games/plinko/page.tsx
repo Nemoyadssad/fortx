@@ -125,12 +125,12 @@ export default function PlinkoPage() {
   const allLanded = results.length > 0 && results.length >= expectedCount;
 
   return (
-    <div className="mx-auto max-w-2xl px-5 py-10">
+    <div className="mx-auto max-w-2xl px-3 sm:px-5 py-10">
       <h1 className="font-display text-3xl font-bold">Plinko</h1>
       <p className="mt-1 text-fg/50">Drop the ball, ride the multipliers. Provably fair.</p>
 
       {/* board */}
-      <div className="relative mt-6 h-[340px] overflow-hidden rounded-2xl panel">
+      <div className="relative mt-6 h-[300px] sm:h-[340px] overflow-hidden rounded-2xl panel">
         <PlinkoScene
           rows={rows}
           pegs={pegs}
@@ -140,11 +140,12 @@ export default function PlinkoPage() {
           segmentMs={ballCount > 10 ? 90 : ballCount > 5 ? 115 : 150}
         />
         {/* buckets */}
-        <div className="absolute inset-x-2 bottom-2 flex gap-0.5">
+        <div className="absolute inset-x-1 bottom-1 flex gap-[2px]">
           {mults.map((m, i) => (
             <div
               key={i}
-              className={`flex-1 rounded py-1 text-center font-mono text-[9px] font-bold transition ${bucketColor(m)} ${landedBuckets[i] ? 'ring-2 ring-white scale-110' : ''}`}
+              className={`flex-1 min-w-0 rounded py-0.5 sm:py-1 text-center font-mono font-bold leading-tight transition ${bucketColor(m)} ${landedBuckets[i] ? 'ring-2 ring-white scale-110' : ''}`}
+              style={{ fontSize: `clamp(6px, ${(1 / (rows + 1)) * 90}vw, 10px)` }}
             >
               {m}×
             </div>
