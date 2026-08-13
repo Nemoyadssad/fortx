@@ -16,9 +16,9 @@ import diceImg from './dice/dice.png';
 import plinkoImg from './plinko/plinko.png';
 import rouletteImg from './roulette/roulette.png';
 import coinflipImg from './coinflip/coinflip.png';
+import slotsImg from './Slots/Slots.png';
 import wheelImg from '../wheel/wheel.png';
 import vipImg from '../vip/vip.png';
-import slotsImg from './Slots/Slots.png';
 
 const GAMES = [
   {
@@ -119,7 +119,7 @@ export default function GamesHub() {
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-5 lg:grid-cols-3">
         {GAMES.map((g: any) => {
-          // Coming-soon games (no route yet): icon tile, opens modal on click.
+          // Coming-soon games (no route yet): shows its own image, opens modal on click.
           if (g.comingSoon) {
             return (
               <button
@@ -127,8 +127,15 @@ export default function GamesHub() {
                 onClick={() => window.dispatchEvent(new CustomEvent('predikt:comingsoon', { detail: g.name }))}
                 className={`group relative flex flex-col overflow-hidden rounded-xl border border-white/5 panel shadow-panel transition-all duration-300 hover:-translate-y-1.5 sm:rounded-2xl text-left ${g.glow}`}
               >
-                <div className="relative flex aspect-[16/10] items-center justify-center overflow-hidden bg-gradient-to-br from-gold/15 via-panel2 to-panel2">
-                  <Dices className="h-10 w-10 text-gold-deep/70 transition-transform duration-500 group-hover:scale-110 sm:h-14 sm:w-14" />
+                <div className="relative aspect-[16/10] overflow-hidden">
+                  <Image
+                    src={g.img}
+                    alt={g.name}
+                    fill
+                    className="object-cover transition-transform duration-500 ease-out group-hover:scale-110"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/5 to-transparent" />
                   <span className="absolute right-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-gold-deep backdrop-blur sm:right-3 sm:top-3 sm:text-[10px]">
                     Soon
                   </span>
