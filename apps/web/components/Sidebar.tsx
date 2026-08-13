@@ -249,7 +249,7 @@ export function Sidebar() {
               {comingSoonLabel} — Coming Soon
             </h3>
             <p className="mt-2 text-sm text-fg/60">
-              Мы уже готовим {comingSoonLabel.toLowerCase()}. Загляните позже — скоро будет доступно!
+              We're already preparing. {comingSoonLabel.toLowerCase()}. Check back later - it will be available soon!
             </p>
 
             <button

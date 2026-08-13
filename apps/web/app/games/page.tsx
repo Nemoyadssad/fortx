@@ -18,6 +18,7 @@ import rouletteImg from './roulette/roulette.png';
 import coinflipImg from './coinflip/coinflip.png';
 import wheelImg from '../wheel/wheel.png';
 import vipImg from '../vip/vip.png';
+import slotsImg from './Slots/Slots.png';
 
 const GAMES = [
   {
@@ -80,6 +81,7 @@ const GAMES = [
     name: 'Slots',
     desc: 'Spin the reels for the big multipliers.',
     comingSoon: true,
+    img: slotsImg,
     glow: 'group-hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.5)] group-hover:border-gold/50',
   },
   {
