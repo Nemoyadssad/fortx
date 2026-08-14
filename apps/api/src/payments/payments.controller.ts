@@ -29,19 +29,19 @@ export class PaymentsController {
    * body.method: 'CRYPTO' (2328, default) | 'RAMPEX'
    */
   @Post('deposit')
-  deposit(
-    @Request() req: any,
-    @Body() body: { amount: number; method?: string },
-  ) {
-    const webOrigin = process.env.WEB_ORIGIN || 'http://localhost:3000';
-    const amount = Number(body.amount);
+deposit(
+  @Request() req: any,
+  @Body() body: { amount: number; method?: string },
+) {
+  const webOrigin = process.env.WEB_ORIGIN || 'http://localhost:3000';
+  const amount = Number(body.amount);
 
-    if (body.method === 'RAMPEX') {
-      return this.rampex.createDeposit(req.user.id, amount, webOrigin);
-    }
-
-    return this.payments.createDeposit(req.user.id, amount, body.method, webOrigin);
+  if (body.method === 'RAMPEX') {
+    return this.rampex.createDeposit(req.user.id, amount, webOrigin, req.user.email);
   }
+
+  return this.payments.createDeposit(req.user.id, amount, body.method, webOrigin);
+}
 
   /**
    * Withdraw — routes to the chosen provider.
@@ -83,16 +83,14 @@ export class PaymentsController {
    * req.rawBody contains the exact bytes Rampex signed.
    */
   @Public()
-  @Post('webhook/rampex')
-  webhookRampex(
-    @Request() req: RawBodyRequest<any>,
-    @Headers('x-rampex-signature') signature: string,
-    @Headers('x-rampex-event') event: string,
-  ) {
-    if (!req.rawBody) {
-      // rawBody не включён в main.ts — подпись проверить нельзя, отклоняем.
-      return { ok: false };
-    }
-    return this.rampex.handleWebhook(req.rawBody, signature, event);
+@Post('webhook/rampex')
+webhookRampex(
+  @Request() req: RawBodyRequest<any>,
+  @Headers('x-webhook-signature') signature: string,
+) {
+  if (!req.rawBody) {
+    return { ok: false };
   }
+  return this.rampex.handleWebhook(req.rawBody, signature);
+}
 }

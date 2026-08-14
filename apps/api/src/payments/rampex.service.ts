@@ -6,9 +6,8 @@ import { AccountType, TxnKind } from '@prisma/client';
 import { WalletService } from '../wallet/wallet.service';
 import { LedgerService } from '../ledger/ledger.service';
 
-// TODO: подтвердить реальный base URL для создания платежа (в скриншотах виден
-// только раздел "Webhook Settings" — эндпоинт создания payment link не показан).
-const BASE = 'https://api.rampex.io/api';
+const BASE = 'https://api.rampex.io';
+const MIN_PAYOUT_USD = 50;
 
 @Injectable()
 export class RampexService {
@@ -25,13 +24,6 @@ export class RampexService {
     return this.config.get('RAMPEX_API_KEY') ?? '';
   }
 
-  private get payoutApiKey(): string {
-    // На случай если у Rampex, как и у 2328, отдельный ключ для выплат.
-    // Если ключ один и тот же для депозитов и выплат — просто задайте
-    // RAMPEX_PAYOUT_API_KEY равным RAMPEX_API_KEY в .env, менять код не надо.
-    return this.config.get('RAMPEX_PAYOUT_API_KEY') ?? this.apiKey;
-  }
-
   private get webhookSecret(): string {
     return this.config.get('RAMPEX_WEBHOOK_SECRET') ?? '';
   }
@@ -40,72 +32,86 @@ export class RampexService {
     return !!(this.apiKey && this.webhookSecret);
   }
 
-  private get payoutConfigured(): boolean {
-    return !!(this.payoutApiKey && this.webhookSecret);
+  private headers(): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'User-Agent': 'FortX/1.0 (+https://www.fortx.world)',
+      'X-API-Key': this.apiKey,
+    };
   }
 
-  // Публичный URL бэкенда для вебхуков. Обязателен в проде.
-  private get apiOrigin(): string {
-    return this.config.get('API_PUBLIC_URL') ?? '';
-  }
-
-  async createDeposit(userId: string, amountUsd: number, webOrigin: string) {
+  /**
+   * Создание платёжной ссылки.
+   * ВАЖНО: webhook_url НЕ передаётся в теле запроса — Rampex шлёт колбэки
+   * только на глобальный URL, настроенный в Dashboard → Settings → Webhooks.
+   * customer_email — обязательное поле API.
+   */
+  async createDeposit(
+    userId: string,
+    amountUsd: number,
+    webOrigin: string,
+    customerEmail: string,
+  ) {
     if (!this.configured) {
       throw new BadRequestException('Rampex payment gateway is not configured.');
     }
     if (amountUsd < 10 || amountUsd > 10000) {
       throw new BadRequestException('Amount must be $10–$10 000.');
     }
+    if (!customerEmail) {
+      throw new BadRequestException('Email is required for Rampex deposits.');
+    }
 
-    const backendOrigin = this.apiOrigin || webOrigin.replace('3000', '4000');
-
-    const orderId = `fortx-rpx-${userId}-${Date.now()}`;
     const payload = {
-      amount: amountUsd.toFixed(2),
+      amount: amountUsd,
       currency: 'USD',
-      order_id: orderId,
-      success_url: `${webOrigin}/cashier?status=success`,
-      webhook_url: `${backendOrigin}/payments/webhook/rampex`,
+      customer_email: customerEmail,
       description: `FortX deposit $${amountUsd}`,
+      payment_url: `${webOrigin}/cashier?status=success`,
     };
 
     const body = JSON.stringify(payload);
-    const res = await fetch(`${BASE}/v1/payment-links`, {
+    const res = await fetch(`${BASE}/api-create-payment-link`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'FortX/1.0 (+https://www.fortx.world)',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
+      headers: this.headers(),
       body,
     });
 
     const data: any = await res.json().catch(() => ({}));
-if (!res.ok || !data?.link_id) {
-  this.logger.error(`Rampex create error: status=${res.status} body=${JSON.stringify(data)}`);
-  throw new BadRequestException(data?.message ?? 'Payment gateway error.');
-}
+
+    // Форма успешного ответа пока не подтверждена документацией —
+    // проверяем оба варианта (плоский и вложенный в data), логируем сырой
+    // ответ на первых порах, чтобы увидеть реальную структуру.
+    const linkId = data?.link_id ?? data?.data?.link_id;
+    const url = data?.url ?? data?.data?.url ?? data?.payment_url;
+
+    if (!res.ok || data?.success === false || !linkId) {
+      this.logger.error(
+        `Rampex create error: status=${res.status} body=${JSON.stringify(data)}`,
+      );
+      throw new BadRequestException(data?.error?.message ?? 'Payment gateway error.');
+    }
 
     await this.prisma.payment.create({
       data: {
         userId,
-        plategaId: data.link_id, // переиспользуем поле, как и для 2328
+        plategaId: linkId,
         amount: amountUsd,
         currency: 'CRYPTO',
         status: 'PENDING',
-        redirectUrl: data.url ?? null,
+        redirectUrl: url ?? null,
       },
     });
 
-    return { redirectUrl: data.url, id: data.link_id };
+    return { redirectUrl: url, id: linkId };
   }
 
   /**
-   * HMAC-SHA256 подписи от СЫРОГО тела запроса (см. Custom Webhook URL —
-   * "X-Rampex-Signature — HMAC-SHA256 of the raw body, hex-encoded").
-   * Здесь ВАЖНО не пересобирать JSON.stringify(payload) — порядок ключей,
-   * пробелы и представление чисел могут не совпасть с оригинальным телом
-   * и подпись не сойдётся. Нужен именно Buffer сырых байт запроса.
+   * HMAC-SHA256 подписи от СЫРОГО тела запроса. Документация Rampex
+   * показывает пример через JSON.stringify(req.body), но это эквивалентно
+   * сырым байтам, т.к. именно JSON.stringify(payload) они и хешируют перед
+   * отправкой на своей стороне — raw body здесь строго надёжнее, оставляем
+   * его.
    */
   verifySignature(rawBody: Buffer, signatureHeader: string | undefined): boolean {
     if (!signatureHeader || !this.webhookSecret) return false;
@@ -116,21 +122,18 @@ if (!res.ok || !data?.link_id) {
 
     const a = Buffer.from(calculated, 'utf8');
     const b = Buffer.from(signatureHeader, 'utf8');
-    // timingSafeEqual требует равной длины буферов — проверяем заранее,
-    // чтобы не бросить исключение на несовпадающих по длине строках.
     if (a.length !== b.length) return false;
     return timingSafeEqual(a, b);
   }
 
   /**
    * Выплата (вывод средств) через Rampex.
-   * Как и в 2328: деньги списываются с ledger ДО обращения к гейту; если
-   * гейт отказал или упал по сети — деньги возвращаются пользователю
-   * компенсирующей транзакцией.
-   *
-   * ВНИМАНИЕ: эндпоинт/поля тела запроса ниже — предположение по аналогии
-   * с 2328 (см. также TODO в createDeposit). Нужно свериться с реальной
-   * документацией "Create Payout" в личном кабинете Rampex.
+   * ВНИМАНИЕ: в присланной документации Merchant API нет раздела про
+   * payout/withdrawal — только Create Payment Link / Get Payment Status.
+   * Возможно, у Rampex выплаты вообще не предусмотрены на Merchant API
+   * уровне (только Master Merchant Program → Payouts & Reporting).
+   * Нужно свериться с разделом "Master Merchant Program → Payouts and
+   * Reporting" в документации, прежде чем полагаться на этот метод в проде.
    */
   async createPayout(
     userId: string,
@@ -139,58 +142,9 @@ if (!res.ok || !data?.link_id) {
     currency = 'USDT',
     network = 'TRX-TRC20',
   ) {
-    if (!this.payoutConfigured) {
-      throw new BadRequestException('Rampex payout is not configured.');
-    }
-    if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
-      throw new BadRequestException('Amount must be a positive number.');
-    }
-    if (!toAddress || typeof toAddress !== 'string' || toAddress.length < 6) {
-      throw new BadRequestException('Invalid destination address.');
-    }
-
-    // 1) Списываем с баланса пользователя ПЕРЕД обращением к гейту.
-    const debitTxn = await this.wallet.withdraw(userId, amountUsd, {
-      actorId: userId,
-      reference: `rampex-payout:${userId}:${Date.now()}`,
-    });
-
-    const orderId = `fortx-rpx-payout-${userId}-${Date.now()}`;
-    const payload = {
-      currency,
-      network,
-      amount: amountUsd.toFixed(2),
-      to_address: toAddress,
-      order_id: orderId,
-    };
-
-    try {
-      const body = JSON.stringify(payload);
-      const res = await fetch(`${BASE}/v1/payouts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'FortX/1.0 (+https://www.fortx.world)',
-          Authorization: `Bearer ${this.payoutApiKey}`,
-        },
-        body,
-      });
-
-      const data: any = await res.json().catch(() => ({}));
-      if (!res.ok || data?.status === 'failed' || data?.error) {
-        this.logger.error('Rampex payout error', data);
-        await this.refund(userId, amountUsd, debitTxn.id);
-        throw new BadRequestException(data?.message ?? 'Payout gateway error.');
-      }
-
-      return data;
-    } catch (err) {
-      if (!(err instanceof BadRequestException)) {
-        this.logger.error('Rampex payout request failed', err);
-        await this.refund(userId, amountUsd, debitTxn.id);
-      }
-      throw err;
-    }
+    throw new BadRequestException(
+      'Rampex payouts are not yet confirmed against the API docs — see Master Merchant Program → Payouts and Reporting.',
+    );
   }
 
   /** Компенсирующая транзакция: возврат средств после неудачной попытки выплаты. */
@@ -218,7 +172,6 @@ if (!res.ok || !data?.link_id) {
   async handleWebhook(
     rawBody: Buffer,
     signatureHeader: string | undefined,
-    eventType: string | undefined,
   ) {
     if (!this.configured) {
       this.logger.warn('Rampex webhook received but gateway not configured');
@@ -238,9 +191,8 @@ if (!res.ok || !data?.link_id) {
       return { ok: false };
     }
 
-    if (eventType !== 'payment.completed' || payload?.status !== 'completed') {
-      // Другие статусы (expired/failed и т.п.) — просто подтверждаем приём,
-      // ничего не начисляем.
+    // event и status — оба поля лежат внутри тела, отдельного заголовка нет.
+    if (payload?.event !== 'payment.completed' || payload?.status !== 'completed') {
       return { ok: true };
     }
 
@@ -249,7 +201,7 @@ if (!res.ok || !data?.link_id) {
 
     const payment = await this.prisma.payment.findUnique({ where: { plategaId: linkId } });
     if (!payment || payment.status !== 'PENDING') {
-      return { ok: true }; // идемпотентность: повтор вебхука не начислит второй раз
+      return { ok: true };
     }
 
     const creditAmount = payload.received_amount
