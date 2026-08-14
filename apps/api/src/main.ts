@@ -14,7 +14,7 @@ process.on('unhandledRejection', (reason) => {
 async function bootstrap() {
   console.log('BOOTSTRAP: starting...');
   try {
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create(AppModule, { rawBody: true });
     console.log('BOOTSTRAP: Nest app created');
 
     app.useGlobalPipes(

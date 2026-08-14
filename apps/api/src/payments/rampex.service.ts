@@ -44,13 +44,11 @@ export class RampexService {
     return !!(this.payoutApiKey && this.webhookSecret);
   }
 
-  /**
-   * Создание платёжной ссылки.
-   * ВНИМАНИЕ: эндпоинт/поля тела запроса ниже — предположение по аналогии
-   * с 2328 и общим видом Rampex-дашборда. Нужно свериться с реальной
-   * документацией "Create Payment" в личном кабинете Rampex, прежде чем
-   * запускать в проде.
-   */
+  // Публичный URL бэкенда для вебхуков. Обязателен в проде.
+  private get apiOrigin(): string {
+    return this.config.get('API_PUBLIC_URL') ?? '';
+  }
+
   async createDeposit(userId: string, amountUsd: number, webOrigin: string) {
     if (!this.configured) {
       throw new BadRequestException('Rampex payment gateway is not configured.');
@@ -59,13 +57,15 @@ export class RampexService {
       throw new BadRequestException('Amount must be $10–$10 000.');
     }
 
+    const backendOrigin = this.apiOrigin || webOrigin.replace('3000', '4000');
+
     const orderId = `fortx-rpx-${userId}-${Date.now()}`;
     const payload = {
       amount: amountUsd.toFixed(2),
       currency: 'USD',
       order_id: orderId,
       success_url: `${webOrigin}/cashier?status=success`,
-      webhook_url: `${webOrigin.replace('3000', '4000')}/payments/webhook/rampex`,
+      webhook_url: `${backendOrigin}/payments/webhook/rampex`,
       description: `FortX deposit $${amountUsd}`,
     };
 
