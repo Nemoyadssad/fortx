@@ -92,7 +92,7 @@ const data: any = await res.json().catch(() => ({}));
     // проверяем оба варианта (плоский и вложенный в data), логируем сырой
     // ответ на первых порах, чтобы увидеть реальную структуру.
     const linkId = data?.link_id ?? data?.data?.link_id;
-    const url = data?.url ?? data?.data?.url ?? data?.payment_url;
+    const url = data?.data?.redirect_url ?? data?.data?.short_url ?? data?.redirect_url ?? data?.url ?? data?.payment_url;fghrty6666
 
     if (!res.ok || data?.success === false || !linkId) {
       this.logger.error(
