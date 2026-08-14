@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import {
   ArrowUpFromLine, Bitcoin, Clock, CheckCircle2, XCircle,
   Tag, Zap, SendHorizonal, Wallet,
-  ChevronRight, ShieldCheck,
+  ChevronRight, ShieldCheck, Check, CreditCard, Smartphone,
+  Coins, Lock,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
@@ -16,6 +17,18 @@ const NETWORKS = [
   { id: 'TRX-TRC20', label: 'USDT · TRC20' },
   { id: 'ETH-ERC20', label: 'USDT · ERC20' },
   { id: 'BSC-BEP20', label: 'USDT · BEP20' },
+];
+
+// Methods surfaced to the player when Rampex is selected. Rampex's hosted
+// checkout (provider=hosted) accepts cards and wallets in addition to
+// crypto — this list is purely descriptive copy, it doesn't change what
+// the backend sends.
+const RAMPEX_METHODS = [
+  { icon: CreditCard, label: 'Visa' },
+  { icon: CreditCard, label: 'Mastercard' },
+  { icon: Smartphone,  label: 'Apple Pay' },
+  { icon: Smartphone,  label: 'Google Pay' },
+  { icon: Coins,       label: 'USDT · BTC · ETH' },
 ];
 
 type PaymentRow = {
@@ -34,7 +47,7 @@ const chip = (active: boolean) =>
 const sectionLabel = 'text-[11px] font-bold uppercase tracking-[0.08em] text-fg/40';
 
 const primaryCta =
-  'flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-bold ' +
+  'relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl py-4 text-[15px] font-bold ' +
   'transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40';
 
 const ghostCta =
@@ -59,7 +72,7 @@ function CardHeader({
 }: { icon: any; iconWrap: string; title: string; subtitle: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${iconWrap}`}>
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors ${iconWrap}`}>
         <Icon className="h-5 w-5" />
       </span>
       <div className="min-w-0">
@@ -67,6 +80,59 @@ function CardHeader({
         <p className="mt-0.5 text-xs text-fg/45">{subtitle}</p>
       </div>
     </div>
+  );
+}
+
+// Premium provider selector — replaces the old two-up plain chip grid.
+// Shows what each rail actually offers so the choice is informed, not blind.
+function ProviderCard({
+  active, onClick, icon: Icon, iconWrap, title, subtitle, badge,
+}: {
+  active: boolean; onClick: () => void; icon: any; iconWrap: string;
+  title: string; subtitle: string; badge?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group relative flex w-full items-center gap-3.5 rounded-2xl border p-4 text-left transition-all active:scale-[0.98] ${
+        active
+          ? 'border-gold/50 bg-gold/[0.07] shadow-[0_0_0_1px_rgba(212,175,55,0.16),0_10px_28px_-16px_rgba(212,175,55,0.45)]'
+          : 'border-fg/[0.08] bg-fg/[0.02] hover:border-fg/20 hover:bg-fg/[0.04]'
+      }`}
+    >
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${iconWrap}`}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <p className={`font-display text-[15px] font-bold leading-tight ${active ? 'text-gold-deep' : 'text-fg/85'}`}>
+            {title}
+          </p>
+          {badge && (
+            <span className="rounded-full bg-win/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-win">
+              {badge}
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 text-[12px] leading-snug text-fg/45">{subtitle}</p>
+      </div>
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+          active ? 'border-gold bg-gold' : 'border-fg/20 group-hover:border-fg/35'
+        }`}
+      >
+        {active && <Check className="h-3 w-3 text-black" strokeWidth={3.5} />}
+      </span>
+    </button>
+  );
+}
+
+function MethodChip({ icon: Icon, label }: { icon: any; label: string }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1.5 rounded-full border hairline bg-fg/[0.025] px-3 py-1.5 text-[11px] font-semibold text-fg/60">
+      <Icon className="h-3.5 w-3.5 text-fg/35" /> {label}
+    </span>
   );
 }
 
@@ -79,7 +145,7 @@ function AmountField({
       <div className="relative mt-2">
         <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-mono text-lg font-bold text-fg/30">$</span>
         <input
-          type="number" min={min} step={1} value={value}
+          type="number" inputMode="decimal" min={min} step={1} value={value}
           onChange={e => onChange(Math.max(min, Number(e.target.value)))}
           className="w-full rounded-2xl border hairline bg-fg/[0.03] py-3.5 pl-8 pr-4 font-mono text-xl font-bold outline-none transition focus:border-gold/50 focus:bg-fg/[0.05]"
         />
@@ -100,7 +166,7 @@ function InlineMsg({ msg }: { msg: { ok: boolean; text: string } | null }) {
 }
 
 const TABS = [
-  { id: 'crypto',   label: 'Crypto',   icon: Bitcoin },
+  { id: 'crypto',   label: 'Deposit',  icon: Wallet },
   { id: 'withdraw', label: 'Withdraw', icon: ArrowUpFromLine },
   { id: 'history',  label: 'History',  icon: Clock },
 ] as const;
@@ -189,15 +255,29 @@ export default function CashierPage() {
 
   function resetAll() { setMsg(null); setRedirectUrl(null); setWMsg(null); }
 
+  const isRampex = provider === 'RAMPEX';
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8 sm:px-6">
       <style jsx global>{`
         @keyframes cashierFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes ctaSheen { from { transform: translateX(-120%); } to { transform: translateX(220%); } }
         .cashier-panel { animation: cashierFade .22s ease-out; }
         .cashier-scroll::-webkit-scrollbar { display: none; }
         .cashier-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        .cta-sheen::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          width: 40%;
+          background: linear-gradient(115deg, transparent, rgba(255,255,255,0.28), transparent);
+          animation: ctaSheen 2.8s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .cta-sheen::after { animation: none; }
+        }
       `}</style>
 
       {/* header */}
@@ -239,22 +319,49 @@ export default function CashierPage() {
         ))}
       </div>
 
-      {/* ── 2328 Crypto deposit ── */}
+      {/* ── Deposit (2328 crypto / Rampex card+crypto) ── */}
       {tab === 'crypto' && (
         <div key="crypto" className="cashier-panel mt-4 rounded-3xl panel p-5 sm:p-6">
-          <CardHeader icon={Bitcoin} iconWrap="bg-[#f7931a]/15 text-[#f7931a]" title="Crypto deposit" subtitle="USDT · BTC · ETH and more" />
+          <CardHeader
+            icon={isRampex ? CreditCard : Bitcoin}
+            iconWrap={isRampex ? 'bg-gold/15 text-gold-deep' : 'bg-[#f7931a]/15 text-[#f7931a]'}
+            title={isRampex ? 'Add funds' : 'Crypto deposit'}
+            subtitle={isRampex ? 'Card, crypto, Apple Pay & more' : 'USDT · BTC · ETH and more'}
+          />
 
-          <p className={`mt-5 ${sectionLabel}`}>Provider</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <button onClick={() => setProvider('CRYPTO')} className={chip(provider === 'CRYPTO')}>2328</button>
-            <button onClick={() => setProvider('RAMPEX')} className={chip(provider === 'RAMPEX')}>Rampex</button>
+          <p className={`mt-5 ${sectionLabel}`}>Choose how to pay</p>
+          <div className="mt-2 grid grid-cols-1 gap-2">
+            <ProviderCard
+              active={provider === 'CRYPTO'}
+              onClick={() => setProvider('CRYPTO')}
+              icon={Bitcoin}
+              iconWrap="bg-[#f7931a]/15 text-[#f7931a]"
+              title="2328"
+              subtitle="Crypto only"
+            />
+            <ProviderCard
+              active={provider === 'RAMPEX'}
+              onClick={() => setProvider('RAMPEX')}
+              icon={CreditCard}
+              iconWrap="bg-gold/15 text-gold-deep"
+              title="Rampex"
+              subtitle="Card, wallet & crypto"
+              badge="Card"
+            />
           </div>
+
+          {/* accepted-method strip — only meaningful for Rampex */}
+          {isRampex && (
+            <div className="cashier-scroll mt-3 flex gap-2 overflow-x-auto">
+              {RAMPEX_METHODS.map(m => <MethodChip key={m.label} {...m} />)}
+            </div>
+          )}
 
           <div className="mt-5 grid grid-cols-1 gap-2 rounded-2xl bg-fg/[0.025] p-3.5">
             {[
               'Choose an amount',
-              `Tap Deposit — you\u2019ll be redirected to ${provider === 'RAMPEX' ? 'Rampex' : '2328'}`,
-              'Pay with the crypto of your choice',
+              `Tap Deposit — you\u2019ll be redirected to ${isRampex ? 'Rampex' : '2328'}`,
+              isRampex ? 'Pay by card, wallet, or crypto' : 'Pay with the crypto of your choice',
               'Balance updates automatically',
             ].map((t, i) => (
               <div key={t} className="flex items-center gap-3 text-[13px] text-fg/60">
@@ -277,19 +384,22 @@ export default function CashierPage() {
           {redirectUrl ? (
             <div className="mt-5 space-y-2.5">
               <a href={redirectUrl} target="_blank" rel="noopener noreferrer"
-                className={`${primaryCta} bg-gradient-to-b from-[#f7931a] to-[#d4700d] text-white`}>
-                <Bitcoin className="h-5 w-5" /> Pay {fmtMoney(amount)} in crypto <ChevronRight className="h-4 w-4" />
+                className={`${primaryCta} cta-sheen bg-gradient-to-b ${isRampex ? 'from-gold to-gold-soft text-black shadow-gold' : 'from-[#f7931a] to-[#d4700d] text-white'}`}>
+                {isRampex ? <CreditCard className="h-5 w-5" /> : <Bitcoin className="h-5 w-5" />}
+                Pay {fmtMoney(amount)} now <ChevronRight className="h-4 w-4" />
               </a>
               <button onClick={() => { setRedirectUrl(null); setMsg(null); }} className={ghostCta}>Change amount</button>
             </div>
           ) : (
             <button onClick={cryptoDeposit} disabled={busy}
               className={`${primaryCta} mt-5 bg-gradient-to-b from-gold to-gold-soft text-black shadow-gold`}>
-              {busy ? 'Creating…' : `Deposit ${fmtMoney(amount)} with crypto`}
+              {busy ? 'Creating…' : `Deposit ${fmtMoney(amount)}${isRampex ? '' : ' with crypto'}`}
             </button>
           )}
-          <p className="mt-4 text-center text-[11px] text-fg/30">
-            Powered by {provider === 'RAMPEX' ? 'Rampex' : '2328'} · Credited instantly on confirmation
+
+          <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[11px] text-fg/30">
+            <Lock className="h-3 w-3" />
+            Powered by {isRampex ? 'Rampex' : '2328'} · Credited instantly on confirmation
           </p>
         </div>
       )}
