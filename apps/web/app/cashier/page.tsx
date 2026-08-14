@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowUpFromLine, Bitcoin, Clock, CheckCircle2, XCircle,
-  Tag, Zap, SendHorizonal, CreditCard, QrCode,
+  Tag, Zap, SendHorizonal, CreditCard, QrCode, Wallet,
+  ChevronRight, ShieldCheck, Copy, Check,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
@@ -12,16 +13,16 @@ import { fmtMoney } from '@/lib/format';
 const PRESETS          = [10, 25, 50, 100, 250, 500];
 const WITHDRAW_PRESETS = [50, 100, 250, 500];
 const NETWORKS = [
-  { id: 'TRX-TRC20', label: 'USDT TRC20' },
-  { id: 'ETH-ERC20', label: 'USDT ERC20' },
-  { id: 'BSC-BEP20', label: 'USDT BEP20' },
+  { id: 'TRX-TRC20', label: 'USDT · TRC20' },
+  { id: 'ETH-ERC20', label: 'USDT · ERC20' },
+  { id: 'BSC-BEP20', label: 'USDT · BEP20' },
 ];
 const RL_TICKERS = [
-  { id: 'polygon/usdc', label: 'USDC Polygon' },
-  { id: 'trc20/usdt',   label: 'USDT TRC20'  },
-  { id: 'erc20/usdt',   label: 'USDT ERC20'  },
-  { id: 'btc',          label: 'Bitcoin'      },
-  { id: 'sol/usdc',     label: 'USDC Solana'  },
+  { id: 'polygon/usdc', label: 'USDC', sub: 'Polygon' },
+  { id: 'trc20/usdt',   label: 'USDT', sub: 'TRC20'   },
+  { id: 'erc20/usdt',   label: 'USDT', sub: 'ERC20'   },
+  { id: 'btc',          label: 'BTC',  sub: 'Bitcoin' },
+  { id: 'sol/usdc',     label: 'USDC', sub: 'Solana'  },
 ];
 
 type PaymentRow = {
@@ -29,6 +30,90 @@ type PaymentRow = {
   status: string; createdAt: string; confirmedAt: string | null;
 };
 type Provider = { id: string; provider_name: string; status: string; minimum_amount: number };
+
+// ── shared style helpers ──────────────────────────────────────────────────
+const chip = (active: boolean) =>
+  `rounded-xl border px-3.5 py-2.5 text-sm font-bold transition-all active:scale-[0.97] ${
+    active
+      ? 'border-gold/60 bg-gold/[0.16] text-gold-deep shadow-[0_0_0_1px_rgba(212,175,55,0.15)]'
+      : 'border-fg/[0.08] bg-fg/[0.02] text-fg/55 hover:border-fg/20 hover:text-fg/80'
+  }`;
+
+const sectionLabel = 'text-[11px] font-bold uppercase tracking-[0.08em] text-fg/40';
+
+const primaryCta =
+  'flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-bold ' +
+  'transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40';
+
+const ghostCta =
+  'w-full rounded-2xl border hairline py-3 text-sm font-semibold text-fg/50 ' +
+  'transition hover:border-fg/20 hover:text-fg active:scale-[0.98]';
+
+function StatusPill({ status }: { status: string }) {
+  const map: Record<string, { cls: string; label: string }> = {
+    CONFIRMED: { cls: 'bg-win/15 text-win', label: 'Confirmed' },
+    PENDING:   { cls: 'bg-gold/15 text-gold-deep', label: 'Pending' },
+  };
+  const s = map[status] ?? { cls: 'bg-lose/15 text-lose', label: 'Failed' };
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${s.cls}`}>
+      {s.label}
+    </span>
+  );
+}
+
+function CardHeader({
+  icon: Icon, iconWrap, title, subtitle,
+}: { icon: any; iconWrap: string; title: string; subtitle: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${iconWrap}`}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <h2 className="font-display text-[15px] font-bold leading-tight">{title}</h2>
+        <p className="mt-0.5 text-xs text-fg/45">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+function AmountField({
+  value, onChange, min, label,
+}: { value: number; onChange: (n: number) => void; min: number; label: string }) {
+  return (
+    <>
+      <p className={`mt-5 ${sectionLabel}`}>{label}</p>
+      <div className="relative mt-2">
+        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-mono text-lg font-bold text-fg/30">$</span>
+        <input
+          type="number" min={min} step={1} value={value}
+          onChange={e => onChange(Math.max(min, Number(e.target.value)))}
+          className="w-full rounded-2xl border hairline bg-fg/[0.03] py-3.5 pl-8 pr-4 font-mono text-xl font-bold outline-none transition focus:border-gold/50 focus:bg-fg/[0.05]"
+        />
+      </div>
+      <p className="mt-1.5 text-[11px] text-fg/30">Minimum {fmtMoney(min)}</p>
+    </>
+  );
+}
+
+function InlineMsg({ msg }: { msg: { ok: boolean; text: string } | null }) {
+  if (!msg) return null;
+  return (
+    <p className={`mt-3 flex items-start gap-1.5 text-sm font-medium ${msg.ok ? 'text-win' : 'text-lose'}`}>
+      {msg.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <XCircle className="mt-0.5 h-4 w-4 shrink-0" />}
+      {msg.text}
+    </p>
+  );
+}
+
+const TABS = [
+  { id: 'crypto',   label: 'Crypto',   icon: Bitcoin },
+  { id: 'card',     label: 'Card',     icon: CreditCard },
+  { id: 'rlcrypto', label: 'Direct',   icon: QrCode },
+  { id: 'withdraw', label: 'Withdraw', icon: ArrowUpFromLine },
+  { id: 'history',  label: 'History',  icon: Clock },
+] as const;
 
 export default function CashierPage() {
   const { email, refreshBalance, balances } = useAuth();
@@ -54,6 +139,7 @@ export default function CashierPage() {
   const [rcBusy, setRcBusy]             = useState(false);
   const [rcMsg, setRcMsg]               = useState<{ ok: boolean; text: string } | null>(null);
   const [rcResult, setRcResult]         = useState<{ address_in: string; qr_code: string; value_coin?: string; coin?: string } | null>(null);
+  const [rcCopied, setRcCopied]         = useState(false);
 
   // ── Withdraw ──────────────────────────────────────────────────────────────
   const [wAmount, setWAmount]   = useState(50);
@@ -69,8 +155,8 @@ export default function CashierPage() {
   const [promoMsg, setPromoMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const isDev = process.env.NODE_ENV === 'development';
+  const visibleTabs = isDev ? [...TABS, { id: 'dev' as const, label: 'Dev', icon: Zap }] : TABS;
 
-  // load providers when card tab opens
   useEffect(() => {
     if (tab === 'card' && rlProviders.length === 0) {
       (api as any).payments.riskslessProviders()
@@ -94,8 +180,8 @@ export default function CashierPage() {
     setBusy(true); setMsg(null); setRedirectUrl(null);
     try {
       const r: any = await (api as any).payments.deposit(amount, 'CRYPTO');
-      if (r?.redirectUrl) { setRedirectUrl(r.redirectUrl); setMsg({ ok: true, text: 'Payment created! Click below to pay.' }); }
-    } catch (e: any) { setMsg({ ok: false, text: e?.message ?? 'Error. Check API keys in .env' }); }
+      if (r?.redirectUrl) { setRedirectUrl(r.redirectUrl); setMsg({ ok: true, text: 'Payment created — tap below to pay.' }); }
+    } catch (e: any) { setMsg({ ok: false, text: e?.message ?? 'Something went wrong. Please try again.' }); }
     finally { setBusy(false); }
   }
 
@@ -104,8 +190,8 @@ export default function CashierPage() {
     setRlBusy(true); setRlMsg(null); setRlRedirect(null);
     try {
       const r: any = await (api as any).payments.riskslessDeposit(rlAmount, 'USD', rlProvider);
-      if (r?.redirectUrl) { setRlRedirect(r.redirectUrl); setRlMsg({ ok: true, text: 'Redirect to payment page…' }); }
-    } catch (e: any) { setRlMsg({ ok: false, text: e?.message ?? 'Error creating payment.' }); }
+      if (r?.redirectUrl) { setRlRedirect(r.redirectUrl); setRlMsg({ ok: true, text: 'Redirecting to the payment page…' }); }
+    } catch (e: any) { setRlMsg({ ok: false, text: e?.message ?? 'Could not start this payment.' }); }
     finally { setRlBusy(false); }
   }
 
@@ -115,7 +201,7 @@ export default function CashierPage() {
     try {
       const r: any = await (api as any).payments.riskslessCryptoDeposit(rcTicker, rcAmount, 'USD');
       setRcResult(r);
-    } catch (e: any) { setRcMsg({ ok: false, text: e?.message ?? 'Error generating address.' }); }
+    } catch (e: any) { setRcMsg({ ok: false, text: e?.message ?? 'Could not generate an address.' }); }
     finally { setRcBusy(false); }
   }
 
@@ -127,9 +213,9 @@ export default function CashierPage() {
     try {
       await (api as any).payments.withdraw(wAmount, wAddress.trim(), wNetwork);
       await refreshBalance();
-      setWMsg({ ok: true, text: `Withdrawal of ${fmtMoney(wAmount)} submitted! Usually processed within 10 minutes.` });
+      setWMsg({ ok: true, text: `Withdrawal of ${fmtMoney(wAmount)} submitted — usually done within 10 minutes.` });
       setWAddress('');
-    } catch (e: any) { setWMsg({ ok: false, text: e?.message ?? 'Withdrawal error.' }); }
+    } catch (e: any) { setWMsg({ ok: false, text: e?.message ?? 'Withdrawal failed.' }); }
     finally { setWBusy(false); }
   }
 
@@ -150,34 +236,62 @@ export default function CashierPage() {
     finally { setRedeeming(false); }
   }
 
+  async function copyAddress() {
+    if (!rcResult?.address_in) return;
+    try {
+      await navigator.clipboard.writeText(rcResult.address_in);
+      setRcCopied(true);
+      setTimeout(() => setRcCopied(false), 1500);
+    } catch {}
+  }
+
   function resetAll() { setMsg(null); setRedirectUrl(null); setWMsg(null); setRlMsg(null); setRlRedirect(null); setRcMsg(null); setRcResult(null); }
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="mx-auto max-w-lg px-5 py-10">
-      <h1 className="font-display text-3xl font-bold">Cashier</h1>
-      <p className="mt-1 text-sm text-fg/50">Top up your balance instantly. 18+ · Play responsibly.</p>
+    <div className="mx-auto max-w-lg px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8 sm:px-6">
+      <style jsx global>{`
+        @keyframes cashierFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .cashier-panel { animation: cashierFade .22s ease-out; }
+        .cashier-scroll::-webkit-scrollbar { display: none; }
+        .cashier-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
 
-      <div className="mt-4 flex items-center gap-3 rounded-2xl border hairline bg-gold/[0.06] px-4 py-3">
-        <span className="text-sm text-fg/50">Balance</span>
-        <span className="ml-auto font-mono text-xl font-bold text-gold-deep">
-          {balances ? fmtMoney(balances.cash) : '—'}
+      {/* header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-display text-[26px] font-bold leading-none">Cashier</h1>
+          <p className="mt-1.5 text-sm text-fg/45">Top up instantly · 18+ · Play responsibly</p>
+        </div>
+        <span className="flex h-10 w-10 items-center justify-center rounded-full border hairline text-fg/40">
+          <ShieldCheck className="h-4.5 w-4.5" />
         </span>
       </div>
 
-      {/* tabs */}
-      <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
-        {([
-          { id: 'crypto',   label: 'Crypto',    icon: Bitcoin      },
-          { id: 'card',     label: 'Card',       icon: CreditCard   },
-          { id: 'rlcrypto', label: 'Crypto 2',   icon: QrCode       },
-          ...(isDev ? [{ id: 'dev', label: 'Dev', icon: Zap }] : []),
-          { id: 'withdraw', label: 'Withdraw',   icon: ArrowUpFromLine },
-          { id: 'history',  label: 'History',    icon: Clock        },
-        ] as { id: string; label: string; icon: any }[]).map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => { setTab(id as any); resetAll(); }}
-            className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${tab === id ? 'border-gold/50 bg-gold/15 text-gold-deep' : 'border-fg/[0.08] text-fg/55 hover:text-fg'}`}>
+      {/* balance hero */}
+      <div className="relative mt-5 overflow-hidden rounded-3xl border border-gold/20 bg-gradient-to-br from-gold/[0.10] via-gold/[0.04] to-transparent p-5">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gold/10 blur-2xl" />
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-fg/40">
+          <Wallet className="h-3.5 w-3.5" /> Available balance
+        </div>
+        <p className="mt-2 font-mono text-[34px] font-bold leading-none tracking-tight text-gold-deep">
+          {balances ? fmtMoney(balances.cash) : '—'}
+        </p>
+      </div>
+
+      {/* tabs — scrollable segmented control */}
+      <div className="cashier-scroll -mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-1">
+        {visibleTabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => { setTab(id as any); resetAll(); }}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-bold transition-all active:scale-[0.97] ${
+              tab === id
+                ? 'border-gold/50 bg-gold text-black shadow-gold'
+                : 'border-fg/[0.08] bg-fg/[0.02] text-fg/50 hover:text-fg/80'
+            }`}
+          >
             <Icon className="h-4 w-4" /> {label}
           </button>
         ))}
@@ -185,284 +299,233 @@ export default function CashierPage() {
 
       {/* ── 2328 Crypto deposit ── */}
       {tab === 'crypto' && (
-        <div className="mt-5 rounded-2xl panel p-6">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f7931a]/15">
-              <Bitcoin className="h-6 w-6 text-[#f7931a]" />
-            </span>
-            <div>
-              <h2 className="font-display font-bold">Crypto deposit</h2>
-              <p className="text-xs text-fg/45">USDT · BTC · ETH · and more via 2328</p>
-            </div>
-          </div>
-          <div className="mt-4 space-y-2">
+        <div key="crypto" className="cashier-panel mt-4 rounded-3xl panel p-5 sm:p-6">
+          <CardHeader icon={Bitcoin} iconWrap="bg-[#f7931a]/15 text-[#f7931a]" title="Crypto deposit" subtitle="USDT · BTC · ETH and more, via 2328" />
+
+          <div className="mt-5 grid grid-cols-1 gap-2 rounded-2xl bg-fg/[0.025] p-3.5">
             {[
-              { n: 1, t: 'Choose amount' },
-              { n: 2, t: 'Click Deposit → redirect to 2328' },
-              { n: 3, t: 'Pay in crypto of your choice' },
-              { n: 4, t: 'Balance credited automatically' },
-            ].map(s => (
-              <div key={s.n} className="flex items-center gap-3 text-sm text-fg/60">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold/20 font-mono text-xs font-bold text-gold-deep">{s.n}</span>
-                {s.t}
+              'Choose an amount',
+              'Tap Deposit — you\u2019ll be redirected to 2328',
+              'Pay with the crypto of your choice',
+              'Balance updates automatically',
+            ].map((t, i) => (
+              <div key={t} className="flex items-center gap-3 text-[13px] text-fg/60">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gold/15 font-mono text-[10px] font-bold text-gold-deep">{i + 1}</span>
+                {t}
               </div>
             ))}
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
+
+          <p className={`mt-5 ${sectionLabel}`}>Amount</p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
             {PRESETS.map(v => (
-              <button key={v} onClick={() => setAmount(v)}
-                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${amount === v ? 'border-gold/60 bg-gold/20 text-gold-deep' : 'border-fg/[0.08] text-fg/50 hover:border-gold/30'}`}>
-                ${v}
-              </button>
+              <button key={v} onClick={() => setAmount(v)} className={chip(amount === v)}>${v}</button>
             ))}
           </div>
-          <input type="number" min={10} step={1} value={amount} onChange={e => setAmount(Math.max(10, Number(e.target.value)))}
-            className="mt-3 w-full rounded-xl border hairline bg-fg/[0.04] px-4 py-2.5 font-mono text-xl outline-none focus:border-gold/50" />
-          <p className="mt-1.5 text-xs text-fg/35">Minimum deposit $10</p>
-          {msg && <p className={`mt-3 text-sm font-medium ${msg.ok ? 'text-win' : 'text-lose'}`}>{msg.text}</p>}
+          <AmountField value={amount} onChange={setAmount} min={10} label="Custom amount" />
+
+          <InlineMsg msg={msg} />
+
           {redirectUrl ? (
-            <div className="mt-4 space-y-3">
+            <div className="mt-5 space-y-2.5">
               <a href={redirectUrl} target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#f7931a] to-[#d4700d] py-3.5 font-bold text-white transition hover:brightness-105">
-                <Bitcoin className="h-5 w-5" /> Pay {fmtMoney(amount)} in crypto →
+                className={`${primaryCta} bg-gradient-to-b from-[#f7931a] to-[#d4700d] text-white`}>
+                <Bitcoin className="h-5 w-5" /> Pay {fmtMoney(amount)} in crypto <ChevronRight className="h-4 w-4" />
               </a>
-              <button onClick={() => { setRedirectUrl(null); setMsg(null); }}
-                className="w-full rounded-xl border hairline py-2 text-sm text-fg/50 hover:text-fg">← Change amount</button>
+              <button onClick={() => { setRedirectUrl(null); setMsg(null); }} className={ghostCta}>Change amount</button>
             </div>
           ) : (
             <button onClick={cryptoDeposit} disabled={busy}
-              className="mt-4 w-full rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3.5 font-bold text-black shadow-gold transition hover:brightness-105 disabled:opacity-50">
+              className={`${primaryCta} mt-5 bg-gradient-to-b from-gold to-gold-soft text-black shadow-gold`}>
               {busy ? 'Creating…' : `Deposit ${fmtMoney(amount)} with crypto`}
             </button>
           )}
-          <p className="mt-4 text-center text-[11px] text-fg/30">Powered by 2328 · Instant on confirmation</p>
+          <p className="mt-4 text-center text-[11px] text-fg/30">Powered by 2328 · Credited instantly on confirmation</p>
         </div>
       )}
 
       {/* ── Risksless Card deposit ── */}
       {tab === 'card' && (
-        <div className="mt-5 rounded-2xl panel p-6">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10">
-              <CreditCard className="h-6 w-6 text-blue-400" />
-            </span>
-            <div>
-              <h2 className="font-display font-bold">Card deposit</h2>
-              <p className="text-xs text-fg/45">Visa · Mastercard · via Risksless</p>
-            </div>
-          </div>
+        <div key="card" className="cashier-panel mt-4 rounded-3xl panel p-5 sm:p-6">
+          <CardHeader icon={CreditCard} iconWrap="bg-blue-500/15 text-blue-400" title="Card deposit" subtitle="Visa · Mastercard, via Risksless" />
 
-          {/* provider picker */}
           {rlProviders.length > 0 && (
             <>
-              <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-fg/50">Payment provider</p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <p className={`mt-5 ${sectionLabel}`}>Payment provider</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 {rlProviders.map(p => (
-                  <button key={p.id} onClick={() => setRlProvider(p.id)}
-                    className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${rlProvider === p.id ? 'border-gold/60 bg-gold/20 text-gold-deep' : 'border-fg/[0.08] text-fg/50 hover:border-gold/30'}`}>
-                    {p.provider_name}
-                    <span className="ml-1 text-[10px] opacity-50">min ${p.minimum_amount}</span>
+                  <button key={p.id} onClick={() => setRlProvider(p.id)} className={`${chip(rlProvider === p.id)} flex flex-col items-start gap-0.5 text-left`}>
+                    <span>{p.provider_name}</span>
+                    <span className="text-[10px] font-medium opacity-50">min ${p.minimum_amount}</span>
                   </button>
                 ))}
               </div>
             </>
           )}
 
-          {/* amount */}
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-fg/50">Amount</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <p className={`mt-5 ${sectionLabel}`}>Amount</p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
             {PRESETS.map(v => (
-              <button key={v} onClick={() => setRlAmount(v)}
-                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${rlAmount === v ? 'border-gold/60 bg-gold/20 text-gold-deep' : 'border-fg/[0.08] text-fg/50 hover:border-gold/30'}`}>
-                ${v}
-              </button>
+              <button key={v} onClick={() => setRlAmount(v)} className={chip(rlAmount === v)}>${v}</button>
             ))}
           </div>
-          <input type="number" min={1} step={1} value={rlAmount} onChange={e => setRlAmount(Math.max(1, Number(e.target.value)))}
-            className="mt-3 w-full rounded-xl border hairline bg-fg/[0.04] px-4 py-2.5 font-mono text-xl outline-none focus:border-gold/50" />
-          <p className="mt-1.5 text-xs text-fg/35">Minimum deposit $1</p>
+          <AmountField value={rlAmount} onChange={setRlAmount} min={1} label="Custom amount" />
 
-          {rlMsg && <p className={`mt-3 text-sm font-medium ${rlMsg.ok ? 'text-win' : 'text-lose'}`}>{rlMsg.text}</p>}
+          <InlineMsg msg={rlMsg} />
 
           {rlRedirect ? (
-            <div className="mt-4 space-y-3">
+            <div className="mt-5 space-y-2.5">
               <a href={rlRedirect} target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 py-3.5 font-bold text-white transition hover:brightness-105">
-                <CreditCard className="h-5 w-5" /> Pay {fmtMoney(rlAmount)} by card →
+                className={`${primaryCta} bg-gradient-to-b from-blue-500 to-blue-600 text-white`}>
+                <CreditCard className="h-5 w-5" /> Pay {fmtMoney(rlAmount)} by card <ChevronRight className="h-4 w-4" />
               </a>
-              <button onClick={() => { setRlRedirect(null); setRlMsg(null); }}
-                className="w-full rounded-xl border hairline py-2 text-sm text-fg/50 hover:text-fg">← Change amount</button>
+              <button onClick={() => { setRlRedirect(null); setRlMsg(null); }} className={ghostCta}>Change amount</button>
             </div>
           ) : (
             <button onClick={rlCardDeposit} disabled={rlBusy}
-              className="mt-4 w-full rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 py-3.5 font-bold text-white transition hover:brightness-105 disabled:opacity-50">
+              className={`${primaryCta} mt-5 bg-gradient-to-b from-blue-500 to-blue-600 text-white`}>
               {rlBusy ? 'Creating…' : `Deposit ${fmtMoney(rlAmount)} by card`}
             </button>
           )}
-          <p className="mt-4 text-center text-[11px] text-fg/30">Powered by Risksless · Instant on confirmation</p>
+          <p className="mt-4 text-center text-[11px] text-fg/30">Powered by Risksless · Credited instantly on confirmation</p>
         </div>
       )}
 
       {/* ── Risksless Crypto deposit ── */}
       {tab === 'rlcrypto' && (
-        <div className="mt-5 rounded-2xl panel p-6">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
-              <QrCode className="h-6 w-6 text-emerald-400" />
-            </span>
-            <div>
-              <h2 className="font-display font-bold">Direct crypto</h2>
-              <p className="text-xs text-fg/45">Send crypto directly · QR code · via Risksless</p>
-            </div>
-          </div>
+        <div key="rlcrypto" className="cashier-panel mt-4 rounded-3xl panel p-5 sm:p-6">
+          <CardHeader icon={QrCode} iconWrap="bg-emerald-500/15 text-emerald-400" title="Direct crypto" subtitle="Send crypto straight to an address, via Risksless" />
 
-          {/* ticker */}
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-fg/50">Coin / network</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <p className={`mt-5 ${sectionLabel}`}>Coin / network</p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
             {RL_TICKERS.map(t => (
               <button key={t.id} onClick={() => { setRcTicker(t.id); setRcResult(null); setRcMsg(null); }}
-                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${rcTicker === t.id ? 'border-gold/60 bg-gold/20 text-gold-deep' : 'border-fg/[0.08] text-fg/50 hover:border-gold/30'}`}>
-                {t.label}
+                className={`${chip(rcTicker === t.id)} flex flex-col items-center gap-0.5`}>
+                <span>{t.label}</span>
+                <span className="text-[10px] font-medium opacity-50">{t.sub}</span>
               </button>
             ))}
           </div>
 
-          {/* amount */}
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-fg/50">Amount (USD)</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {PRESETS.map(v => (
-              <button key={v} onClick={() => setRcAmount(v)}
-                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${rcAmount === v ? 'border-gold/60 bg-gold/20 text-gold-deep' : 'border-fg/[0.08] text-fg/50 hover:border-gold/30'}`}>
-                ${v}
-              </button>
-            ))}
-          </div>
-          <input type="number" min={1} step={1} value={rcAmount} onChange={e => setRcAmount(Math.max(1, Number(e.target.value)))}
-            className="mt-3 w-full rounded-xl border hairline bg-fg/[0.04] px-4 py-2.5 font-mono text-xl outline-none focus:border-gold/50" />
+          <AmountField value={rcAmount} onChange={setRcAmount} min={1} label="Amount (USD)" />
 
-          {rcMsg && <p className={`mt-3 text-sm font-medium ${rcMsg.ok ? 'text-win' : 'text-lose'}`}>{rcMsg.text}</p>}
+          <InlineMsg msg={rcMsg} />
 
-          {/* result: address + QR */}
           {rcResult ? (
-            <div className="mt-4 space-y-4">
+            <div className="mt-5 space-y-3">
               {rcResult.value_coin && rcResult.coin && (
-                <div className="rounded-xl border hairline bg-fg/[0.03] px-4 py-3 text-center">
+                <div className="rounded-2xl border border-gold/20 bg-gold/[0.06] px-4 py-3.5 text-center">
                   <p className="text-xs text-fg/45">Send exactly</p>
-                  <p className="font-mono text-2xl font-bold text-gold-deep">
-                    {rcResult.value_coin} <span className="uppercase">{rcResult.coin}</span>
+                  <p className="mt-0.5 font-mono text-2xl font-bold text-gold-deep">
+                    {rcResult.value_coin} <span className="text-base uppercase">{rcResult.coin}</span>
                   </p>
                 </div>
               )}
               {rcResult.qr_code && (
                 <div className="flex justify-center">
-                  <img src={`data:image/png;base64,${rcResult.qr_code}`} alt="Payment QR" className="h-44 w-44 rounded-xl border hairline" />
+                  <div className="rounded-2xl border hairline bg-white p-3">
+                    <img src={`data:image/png;base64,${rcResult.qr_code}`} alt="Payment QR" className="h-40 w-40" />
+                  </div>
                 </div>
               )}
-              <div className="rounded-xl border hairline bg-fg/[0.03] px-4 py-3">
-                <p className="mb-1 text-xs text-fg/45">Receiving address</p>
+              <button onClick={copyAddress}
+                className="w-full rounded-2xl border hairline bg-fg/[0.02] px-4 py-3 text-left transition hover:border-fg/20 active:scale-[0.99]">
+                <p className="mb-1 flex items-center gap-1.5 text-xs text-fg/45">
+                  Receiving address {rcCopied ? <Check className="h-3 w-3 text-win" /> : <Copy className="h-3 w-3" />}
+                </p>
                 <p className="break-all font-mono text-xs text-fg/80">{rcResult.address_in}</p>
-              </div>
-              <button onClick={() => { setRcResult(null); setRcMsg(null); }}
-                className="w-full rounded-xl border hairline py-2 text-sm text-fg/50 hover:text-fg">← Generate new address</button>
+              </button>
+              <button onClick={() => { setRcResult(null); setRcMsg(null); }} className={ghostCta}>Generate a new address</button>
             </div>
           ) : (
             <button onClick={rlCryptoDeposit} disabled={rcBusy}
-              className="mt-4 w-full rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 py-3.5 font-bold text-white transition hover:brightness-105 disabled:opacity-50">
+              className={`${primaryCta} mt-5 bg-gradient-to-b from-emerald-500 to-emerald-600 text-white`}>
               {rcBusy ? 'Generating…' : 'Generate address & QR'}
             </button>
           )}
-          <p className="mt-4 text-center text-[11px] text-fg/30">Powered by Risksless · Balance credited on confirmation</p>
+          <p className="mt-4 text-center text-[11px] text-fg/30">Powered by Risksless · Credited on confirmation</p>
         </div>
       )}
 
       {/* ── Dev top-up ── */}
       {tab === 'dev' && isDev && (
-        <div className="mt-5 rounded-2xl panel p-5">
-          <h2 className="font-display font-semibold text-gold-deep">Dev top-up</h2>
-          <div className="mt-4 flex flex-wrap gap-2">
+        <div key="dev" className="cashier-panel mt-4 rounded-3xl panel p-5">
+          <CardHeader icon={Zap} iconWrap="bg-gold/15 text-gold-deep" title="Dev top-up" subtitle="Local testing only" />
+          <div className="mt-5 grid grid-cols-3 gap-2">
             {PRESETS.map(v => (
-              <button key={v} onClick={() => setAmount(v)}
-                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${amount === v ? 'border-gold/50 bg-gold/15 text-gold-deep' : 'border-fg/[0.08] text-fg/50'}`}>
-                ${v}
-              </button>
+              <button key={v} onClick={() => setAmount(v)} className={chip(amount === v)}>${v}</button>
             ))}
           </div>
-          {msg && <p className={`mt-3 text-sm ${msg.ok ? 'text-win' : 'text-lose'}`}>{msg.text}</p>}
+          <InlineMsg msg={msg} />
           <button onClick={devTopup} disabled={busy}
-            className="mt-4 w-full rounded-xl bg-gradient-to-b from-win to-[#1ea65a] py-3 font-bold text-white transition hover:brightness-105 disabled:opacity-50">
-            {busy ? '…' : `Add ${fmtMoney(amount)}`}
+            className={`${primaryCta} mt-5 bg-gradient-to-b from-win to-[#1ea65a] text-white`}>
+            {busy ? 'Adding…' : `Add ${fmtMoney(amount)}`}
           </button>
         </div>
       )}
 
       {/* ── Withdraw ── */}
       {tab === 'withdraw' && (
-        <div className="mt-5 rounded-2xl panel p-6">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/10">
-              <SendHorizonal className="h-5 w-5 text-gold-deep" />
-            </span>
-            <div>
-              <h2 className="font-display font-bold">Withdraw</h2>
-              <p className="text-xs text-fg/45">Crypto payout · Min $50 · via 2328</p>
-            </div>
-          </div>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-fg/50">Network</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+        <div key="withdraw" className="cashier-panel mt-4 rounded-3xl panel p-5 sm:p-6">
+          <CardHeader icon={SendHorizonal} iconWrap="bg-gold/15 text-gold-deep" title="Withdraw" subtitle="Crypto payout · Min $50, via 2328" />
+
+          <p className={`mt-5 ${sectionLabel}`}>Network</p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
             {NETWORKS.map(n => (
-              <button key={n.id} onClick={() => setWNetwork(n.id)}
-                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${wNetwork === n.id ? 'border-gold/60 bg-gold/20 text-gold-deep' : 'border-fg/[0.08] text-fg/50 hover:border-gold/30'}`}>
-                {n.label}
-              </button>
+              <button key={n.id} onClick={() => setWNetwork(n.id)} className={`${chip(wNetwork === n.id)} text-[13px]`}>{n.label}</button>
             ))}
           </div>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-fg/50">Amount</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+
+          <p className={`mt-5 ${sectionLabel}`}>Amount</p>
+          <div className="mt-2 grid grid-cols-4 gap-2">
             {WITHDRAW_PRESETS.map(v => (
-              <button key={v} onClick={() => setWAmount(v)}
-                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${wAmount === v ? 'border-gold/60 bg-gold/20 text-gold-deep' : 'border-fg/[0.08] text-fg/50 hover:border-gold/30'}`}>
-                ${v}
-              </button>
+              <button key={v} onClick={() => setWAmount(v)} className={chip(wAmount === v)}>${v}</button>
             ))}
           </div>
-          <input type="number" min={50} step={1} value={wAmount} onChange={e => setWAmount(Math.max(50, Number(e.target.value)))}
-            className="mt-3 w-full rounded-xl border hairline bg-fg/[0.04] px-4 py-2.5 font-mono text-xl outline-none focus:border-gold/50" />
-          <p className="mt-1.5 text-xs text-fg/35">Minimum withdrawal $50</p>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-fg/50">Wallet address</p>
+          <AmountField value={wAmount} onChange={setWAmount} min={50} label="Custom amount" />
+
+          <p className={`mt-5 ${sectionLabel}`}>Wallet address</p>
           <input type="text" value={wAddress} onChange={e => setWAddress(e.target.value)}
-            placeholder="Your USDT wallet address…"
-            className="mt-2 w-full rounded-xl border hairline bg-fg/[0.04] px-4 py-2.5 font-mono text-sm outline-none focus:border-gold/50" />
-          {wMsg && <p className={`mt-3 text-sm font-medium ${wMsg.ok ? 'text-win' : 'text-lose'}`}>{wMsg.text}</p>}
+            placeholder="Paste your USDT wallet address…"
+            className="mt-2 w-full rounded-2xl border hairline bg-fg/[0.03] px-4 py-3.5 font-mono text-sm outline-none transition focus:border-gold/50 focus:bg-fg/[0.05]" />
+
+          <InlineMsg msg={wMsg} />
+
           <button onClick={withdraw} disabled={wBusy || !wAddress.trim()}
-            className="mt-4 w-full rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3.5 font-bold text-black shadow-gold transition hover:brightness-105 disabled:opacity-50">
+            className={`${primaryCta} mt-5 bg-gradient-to-b from-gold to-gold-soft text-black shadow-gold`}>
             {wBusy ? 'Processing…' : `Withdraw ${fmtMoney(wAmount)}`}
           </button>
-          <p className="mt-3 text-center text-[11px] text-fg/30">Powered by 2328 · Usually within 10 minutes</p>
+          <p className="mt-4 text-center text-[11px] text-fg/30">Powered by 2328 · Usually within 10 minutes</p>
         </div>
       )}
 
       {/* ── History ── */}
       {tab === 'history' && (
-        <div className="mt-5 rounded-2xl panel p-5">
-          <h2 className="mb-4 font-display font-semibold">Payment history</h2>
-          {history.length === 0 ? <p className="text-sm text-fg/40">No payments yet.</p> : (
+        <div key="history" className="cashier-panel mt-4 rounded-3xl panel p-5">
+          <h2 className="mb-4 font-display text-[15px] font-bold">Payment history</h2>
+          {history.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-fg/[0.04] text-fg/30">
+                <Clock className="h-5 w-5" />
+              </span>
+              <p className="text-sm text-fg/40">No payments yet</p>
+            </div>
+          ) : (
             <div className="space-y-2">
               {history.map(p => (
-                <div key={p.id} className="flex items-center gap-3 rounded-xl border hairline p-3 text-sm">
+                <div key={p.id} className="flex items-center gap-3 rounded-2xl border hairline p-3.5 text-sm">
                   {p.status === 'CONFIRMED'
-                    ? <CheckCircle2 className="h-4 w-4 text-win" />
+                    ? <CheckCircle2 className="h-4 w-4 shrink-0 text-win" />
                     : p.status === 'PENDING'
-                      ? <Clock className="h-4 w-4 text-gold-deep" />
-                      : <XCircle className="h-4 w-4 text-lose" />}
+                      ? <Clock className="h-4 w-4 shrink-0 text-gold-deep" />
+                      : <XCircle className="h-4 w-4 shrink-0 text-lose" />}
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">{p.currency}</p>
                     <p className="text-xs text-fg/40">{new Date(p.createdAt).toLocaleString()}</p>
                   </div>
                   <div className="text-right">
                     <p className="font-mono font-bold text-gold-deep">{fmtMoney(p.amount)}</p>
-                    <p className={`text-[10px] font-semibold uppercase ${p.status === 'CONFIRMED' ? 'text-win' : p.status === 'PENDING' ? 'text-gold-deep' : 'text-lose'}`}>
-                      {p.status}
-                    </p>
+                    <div className="mt-1"><StatusPill status={p.status} /></div>
                   </div>
                 </div>
               ))}
@@ -472,20 +535,20 @@ export default function CashierPage() {
       )}
 
       {/* ── Promo ── */}
-      <div className="mt-5 rounded-2xl panel p-5">
+      <div className="cashier-panel mt-4 rounded-3xl panel p-5">
         <div className="flex items-center gap-2">
           <Tag className="h-4 w-4 text-gold-deep" />
-          <h2 className="font-display font-semibold">Promo code</h2>
+          <h2 className="font-display text-[15px] font-bold">Promo code</h2>
         </div>
         <div className="mt-3 flex gap-2">
           <input value={code} onChange={e => setCode(e.target.value)} placeholder="Enter code…"
-            className="flex-1 rounded-xl border hairline bg-fg/[0.04] px-4 py-2.5 text-sm outline-none focus:border-gold/50" />
+            className="flex-1 rounded-2xl border hairline bg-fg/[0.03] px-4 py-3 text-sm outline-none transition focus:border-gold/50 focus:bg-fg/[0.05]" />
           <button onClick={redeem} disabled={redeeming || !code.trim()}
-            className="rounded-xl border border-gold/40 px-4 py-2.5 text-sm font-semibold text-gold-deep transition hover:bg-gold/10 disabled:opacity-40">
+            className="shrink-0 rounded-2xl border border-gold/40 px-5 py-3 text-sm font-bold text-gold-deep transition hover:bg-gold/10 active:scale-[0.97] disabled:opacity-40">
             {redeeming ? '…' : 'Redeem'}
           </button>
         </div>
-        {promoMsg && <p className={`mt-2 text-xs font-medium ${promoMsg.ok ? 'text-win' : 'text-lose'}`}>{promoMsg.text}</p>}
+        <InlineMsg msg={promoMsg} />
       </div>
     </div>
   );
