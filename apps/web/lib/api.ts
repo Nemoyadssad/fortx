@@ -56,6 +56,8 @@ async function req(path: string, options: RequestInit = {}): Promise<any> {
   return data;
 }
 
+export type PaymentMethod = 'CRYPTO' | 'RAMPEX';
+
 export const api = {
   events: (take = 24, opts?: { category?: string }) =>
     req(`/events?take=${take}${opts?.category ? `&category=${encodeURIComponent(opts.category)}` : ''}`),
@@ -74,12 +76,16 @@ export const api = {
   loginTelegram: (initData: string) =>
     req('/auth/telegram', { method: 'POST', body: JSON.stringify({ initData }) }),
   me: () => req('/auth/me'),
+
   wallet: () => req('/wallet/me'),
   walletStats: () => req('/wallet/stats'),
-  deposit: (amount: number) =>
-    req('/wallet/deposit', { method: 'POST', body: JSON.stringify({ amount }) }),
-  withdraw: (amount: number) =>
-    req('/wallet/withdraw', { method: 'POST', body: JSON.stringify({ amount }) }),
+  // NOTE: deposit/withdraw removed from here — /wallet/deposit and
+  // /wallet/withdraw don't exist on the backend anymore (see
+  // PaymentsController). All deposits/withdrawals now go through
+  // api.payments.deposit(...) / api.payments.withdraw(...) below,
+  // which hit /payments/deposit and /payments/withdraw and route to
+  // 2328 or Rampex based on the `method` field.
+
   redeemPromo: (code: string) =>
     req('/promos/redeem', { method: 'POST', body: JSON.stringify({ code }) }),
   marketHistory: (id: string) => req(`/markets/${id}/history`),
@@ -99,7 +105,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ amount, note }),
       }),
-      referralWithdrawals: (status?: string) =>
+    referralWithdrawals: (status?: string) =>
       req(`/admin/referrals/withdrawals${status ? `?status=${status}` : ''}`),
     approveReferralWithdrawal: (id: string) =>
       req(`/admin/referrals/withdrawals/${id}/approve`, { method: 'POST' }),
@@ -168,25 +174,29 @@ export const api = {
     withdrawals: () => req('/referrals/withdrawals'),
   },
 
- payments: {
+  payments: {
     methods: () => req('/payments/methods'),
-    deposit: (amount: number, method: string) => req('/payments/deposit', { method: 'POST', body: JSON.stringify({ amount, method }) }),
-    history: () => req('/payments/history'),
-    withdraw: (amount: number, address: string, network: string) => req('/payments/withdraw', { method: 'POST', body: JSON.stringify({ amount, address, network }) }),
 
-    // ── Risksless ────────────────────────────────────────────────────────────
-    riskslessProviders: () => req('/payments/risksless/providers'),
-    riskslessDeposit: (amount: number, currency?: string, provider?: string, email?: string) =>
-      req('/payments/risksless/deposit', {
+    deposit: (amount: number, method: PaymentMethod = 'CRYPTO') =>
+      req('/payments/deposit', {
         method: 'POST',
-        body: JSON.stringify({ amount, currency, provider, email }),
+        body: JSON.stringify({ amount, method }),
       }),
-    riskslessCryptoDeposit: (ticker?: string, fiatAmount?: number, fiatCurrency?: string) =>
-      req('/payments/risksless/crypto-deposit', {
+
+    history: () => req('/payments/history'),
+
+    withdraw: (
+      amount: number,
+      address: string,
+      network: string,
+      method: PaymentMethod = 'CRYPTO',
+    ) =>
+      req('/payments/withdraw', {
         method: 'POST',
-        body: JSON.stringify({ ticker, fiatAmount, fiatCurrency }),
+        body: JSON.stringify({ amount, address, network, method }),
       }),
   },
+
   jackpot: {
     current: () => req('/jackpot/current'),
     history: () => req('/jackpot/history'),
@@ -255,9 +265,9 @@ export const api = {
       req('/games/dice/play', { method: 'POST', body: JSON.stringify({ stake, target, direction }) }),
     diceRecent: () => req('/games/dice/recent'),
     plinkoPlay: (stake: number, rows: number, risk: 'low' | 'medium' | 'high') =>
-  req('/games/plinko/play', { method: 'POST', body: JSON.stringify({ stake, rows, risk }) }),
+      req('/games/plinko/play', { method: 'POST', body: JSON.stringify({ stake, rows, risk }) }),
     plinkoPlayBatch: (count: number, stake: number, rows: number, risk: 'low' | 'medium' | 'high') =>
-  req('/games/plinko/play-batch', { method: 'POST', body: JSON.stringify({ count, stake, rows, risk }) }),
+      req('/games/plinko/play-batch', { method: 'POST', body: JSON.stringify({ count, stake, rows, risk }) }),
     plinkoRecent: () => req('/games/plinko/recent'),
     roulettePlay: (stake: number, betType: string, betValue: string) =>
       req('/games/roulette/play', { method: 'POST', body: JSON.stringify({ stake, betType, betValue }) }),
