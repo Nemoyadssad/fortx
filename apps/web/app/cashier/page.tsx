@@ -336,7 +336,7 @@ export default function CashierPage() {
               onClick={() => setProvider('CRYPTO')}
               icon={Bitcoin}
               iconWrap="bg-[#f7931a]/15 text-[#f7931a]"
-              title="2328"
+              title="All Crypto"
               subtitle="Crypto only"
             />
             <ProviderCard
@@ -344,7 +344,7 @@ export default function CashierPage() {
               onClick={() => setProvider('RAMPEX')}
               icon={CreditCard}
               iconWrap="bg-gold/15 text-gold-deep"
-              title="Rampex"
+              title="All Pay"
               subtitle="Card, wallet & crypto"
               badge="Card"
             />
@@ -428,8 +428,8 @@ export default function CashierPage() {
 
           <p className={`mt-5 ${sectionLabel}`}>Provider</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
-            <button onClick={() => setWProvider('CRYPTO')} className={chip(wProvider === 'CRYPTO')}>2328</button>
-            <button onClick={() => setWProvider('RAMPEX')} className={chip(wProvider === 'RAMPEX')}>Rampex</button>
+            <button onClick={() => setWProvider('CRYPTO')} className={chip(wProvider === 'CRYPTO')}>All Crypto</button>
+            <button onClick={() => setWProvider('RAMPEX')} className={chip(wProvider === 'RAMPEX')}>All Pay</button>
           </div>
 
           <p className={`mt-5 ${sectionLabel}`}>Network</p>
