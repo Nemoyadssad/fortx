@@ -77,7 +77,11 @@ export class RampexService {
       body,
     });
 
-    const data: any = await res.json().catch(() => ({}));
+const data: any = await res.json().catch(() => ({}));
+
+    this.logger.log(`Rampex response: ${JSON.stringify(data)}`);
+
+    // Форма успешного ответа пока не подтверждена документацией —
 
     // ВРЕМЕННЫЙ ЛОГ ДЛЯ ОТЛАДКИ: печатаем сырой ответ Rampex целиком,
     // чтобы увидеть реальную структуру (успех и ошибку). Убрать после
