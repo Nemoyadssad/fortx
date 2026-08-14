@@ -81,8 +81,8 @@ export class RampexService {
     });
 
     const data: any = await res.json().catch(() => ({}));
-    if (!res.ok || !data?.link_id) {
-  this.logger.error(`Rampex create error: ${JSON.stringify(data)} (status ${res.status})`);
+if (!res.ok || !data?.link_id) {
+  this.logger.error(`Rampex create error: status=${res.status} body=${JSON.stringify(data)}`);
   throw new BadRequestException(data?.message ?? 'Payment gateway error.');
 }
 
