@@ -173,6 +173,19 @@ export const api = {
     deposit: (amount: number, method: string) => req('/payments/deposit', { method: 'POST', body: JSON.stringify({ amount, method }) }),
     history: () => req('/payments/history'),
     withdraw: (amount: number, address: string, network: string) => req('/payments/withdraw', { method: 'POST', body: JSON.stringify({ amount, address, network }) }),
+
+    // ── Risksless ────────────────────────────────────────────────────────────
+    riskslessProviders: () => req('/payments/risksless/providers'),
+    riskslessDeposit: (amount: number, currency?: string, provider?: string, email?: string) =>
+      req('/payments/risksless/deposit', {
+        method: 'POST',
+        body: JSON.stringify({ amount, currency, provider, email }),
+      }),
+    riskslessCryptoDeposit: (ticker?: string, fiatAmount?: number, fiatCurrency?: string) =>
+      req('/payments/risksless/crypto-deposit', {
+        method: 'POST',
+        body: JSON.stringify({ ticker, fiatAmount, fiatCurrency }),
+      }),
   },
   jackpot: {
     current: () => req('/jackpot/current'),
