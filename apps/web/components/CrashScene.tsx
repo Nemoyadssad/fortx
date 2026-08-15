@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 type Props = {
   active: boolean;
@@ -19,12 +19,15 @@ type Particle = {
   size: number;
 };
 
+// Natural aspect ratio of the rocket artwork (width / height).
+const ROCKET_ASPECT = 828 / 1900;
+
 // Safe flight zone in percent — the rocket NEVER goes outside this box,
 // so it can't fly off the visible frame regardless of container size.
-const X_MIN = 12;
-const X_MAX = 78;
-const Y_MIN = 16;
-const Y_MAX = 82;
+const X_MIN = 14;
+const X_MAX = 76;
+const Y_MIN = 20;
+const Y_MAX = 80;
 
 function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
@@ -43,18 +46,50 @@ function pointForProgress(p: number) {
   return { x, y };
 }
 
+// Angle of ascent (0 = flying dead right, 90 = flying straight up), as a
+// deterministic function of progress rather than a numeric derivative of
+// trail points. A numeric derivative degenerates to (0,0) right at launch
+// (the "behind" point and the current point coincide), which produced a
+// jittery, sometimes near-flat/"lying down" rotation. This version is
+// smooth, jitter-free, and clamped so the rocket always stays tilted
+// between a steep climb and a forward lean — never flat, never flipped.
+const ANGLE_START = 70; // near-vertical liftoff
+const ANGLE_END = 26; // leaning forward at high speed/multiplier
+function angleForProgress(p: number) {
+  const t = easeOutCubic(p);
+  return ANGLE_START + (ANGLE_END - ANGLE_START) * t;
+}
+
 let particleId = 0;
 
 export default function CrashScene({ active, crashed, cashedOut, multiplier }: Props) {
   const progress = progressFromMultiplier(multiplier);
   const { x, y } = pointForProgress(progress);
+  const angleDeg = angleForProgress(progress);
 
-  // Angle of ascent relative to "pointing right" (0deg). The rocket artwork's
-  // nose points straight UP in the source image, so we add a +90deg offset
-  // when applying the rotation to the <img> below.
-  const behind = pointForProgress(Math.max(0, progress - 0.03));
-  const angleRad = Math.atan2(behind.y - y, x - behind.x);
-  const angleDeg = (angleRad * 180) / Math.PI;
+  // Measure the real container so the rocket is always sized proportionally
+  // to the box it's flying in — desktop, mobile, whatever the width is.
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState({ w: 480, h: 260 });
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) setBox({ w: width, h: height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Rocket height is a healthy chunk of the smaller box dimension, clamped
+  // to sane min/max so it looks right on a tiny phone or a wide desktop card.
+  const rocketH = Math.min(Math.max(Math.min(box.w, box.h) * 0.62, 64), 230);
+  const rocketW = rocketH * ROCKET_ASPECT;
+  const scale = rocketH / 150; // baseline scale factor for glow/flame
 
   const trailRef = useRef<{ x: number; y: number }[]>([]);
   const [, forceTick] = useState(0);
@@ -75,7 +110,6 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
   const prevCashed = useRef(false);
   const emberTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Continuous ember trail while flying, emitted from behind the rocket.
   useEffect(() => {
     if (!active) {
       if (emberTimer.current) clearInterval(emberTimer.current);
@@ -83,15 +117,15 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
       return;
     }
     emberTimer.current = setInterval(() => {
-      const backRad = angleRad + Math.PI;
+      const backRad = (angleDeg * Math.PI) / 180 + Math.PI;
       setEmbers((prev) => {
         const next = prev
           .map((p) => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, size: p.size * 0.9 }))
           .filter((p) => p.size > 0.15);
         next.push({
           id: particleId++,
-          x: x + Math.cos(backRad) * 2.2,
-          y: y + Math.sin(backRad) * 2.2,
+          x: x + Math.cos(backRad) * 2.4,
+          y: y + Math.sin(backRad) * 2.4,
           vx: Math.cos(backRad) * 0.35 + (Math.random() - 0.5) * 0.2,
           vy: Math.sin(backRad) * 0.35 + (Math.random() - 0.5) * 0.2,
           color: Math.random() > 0.5 ? '#c96bff' : '#ff8ee6',
@@ -200,6 +234,7 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
 
   return (
     <div
+      ref={containerRef}
       className={`absolute inset-0 overflow-hidden ${shake ? 'animate-crashScene-shake' : ''}`}
       style={{ willChange: 'transform' }}
     >
@@ -234,14 +269,14 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
           />
         ))}
 
-        <line x1="0" y1={Y_MAX + 6} x2="100" y2={Y_MAX + 6} stroke="#ffffff" strokeOpacity="0.06" strokeWidth="0.3" />
+        <line x1="0" y1={Y_MAX + 8} x2="100" y2={Y_MAX + 8} stroke="#ffffff" strokeOpacity="0.06" strokeWidth="0.3" />
 
         {trailPath && (
           <path
             d={trailPath}
             fill="none"
             stroke="url(#trailGrad)"
-            strokeWidth="1"
+            strokeWidth="1.1"
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
@@ -281,14 +316,17 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
         )}
       </svg>
 
-      {/* rocket — real brand artwork, absolutely positioned by percent so it
-          can never fly outside the padded flight box */}
+      {/* rocket — real brand artwork, sized proportionally to the actual
+          measured container so it always looks right on any screen size,
+          and positioned by percent so it never flies outside the frame */}
       {showRocket && !crashed && (
         <div
           className="absolute"
           style={{
             left: `${x}%`,
             top: `${y}%`,
+            width: rocketW,
+            height: rocketH,
             transform: `translate(-50%, -50%) rotate(${90 - angleDeg}deg)`,
             transition: active ? 'none' : 'left 0.25s ease, top 0.25s ease',
           }}
@@ -298,25 +336,27 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
             className="absolute rounded-full blur-xl"
             style={{
               left: '50%',
-              top: '58%',
-              width: 70,
-              height: 70,
+              top: '56%',
+              width: rocketH * 0.62,
+              height: rocketH * 0.62,
               transform: 'translate(-50%, -50%)',
-              background: `radial-gradient(circle, ${glowColor}55 0%, transparent 70%)`,
+              background: `radial-gradient(circle, ${glowColor}5c 0%, transparent 70%)`,
             }}
           />
 
           {/* engine flame, anchored to the tail (bottom of the artwork) */}
           {active && (
             <div
-              className="absolute animate-crashScene-flame"
+              className="absolute left-1/2 animate-crashScene-flame"
               style={{
-                left: '50%',
-                bottom: '-2px',
+                bottom: -rocketH * 0.02,
+                width: rocketW * 0.55,
+                height: rocketH * 0.3,
+                transform: 'translateX(-50%)',
                 transformOrigin: 'top center',
               }}
             >
-              <svg width="26" height="34" viewBox="0 0 26 34" style={{ transform: 'translateX(-50%)' }}>
+              <svg width="100%" height="100%" viewBox="0 0 26 34" preserveAspectRatio="none">
                 <defs>
                   <linearGradient id="flameGrad" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stopColor="#fff3c4" />
@@ -332,11 +372,9 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
           <img
             src="/rocket-fortx.png"
             alt=""
-            width={54}
-            height={124}
-            className="relative select-none"
+            className="relative h-full w-full select-none object-contain"
             style={{
-              filter: `drop-shadow(0 0 10px ${glowColor}aa) drop-shadow(0 2px 6px rgba(0,0,0,0.5))`,
+              filter: `drop-shadow(0 0 ${10 * scale}px ${glowColor}aa) drop-shadow(0 ${3 * scale}px ${7 * scale}px rgba(0,0,0,0.5))`,
             }}
             draggable={false}
           />
@@ -355,8 +393,8 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
         }
 
         @keyframes crashScene-flame {
-          0%, 100% { transform: scaleY(1) scaleX(1); opacity: 0.95; }
-          50% { transform: scaleY(1.18) scaleX(0.88); opacity: 1; }
+          0%, 100% { transform: translateX(-50%) scaleY(1) scaleX(1); opacity: 0.95; }
+          50% { transform: translateX(-50%) scaleY(1.18) scaleX(0.88); opacity: 1; }
         }
         .animate-crashScene-flame {
           animation: crashScene-flame 0.14s ease-in-out infinite;
