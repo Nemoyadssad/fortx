@@ -188,15 +188,15 @@ function HeroCard({
         </span>
       </div>
 
-      {/* floating flags — only show when no chart, to save vertical space */}
-      {!hasChart && (
-        <div className="relative mt-4 mb-3">
+      {/* floating flags — only when no chart */}
+      {!hasChart && series !== null && (
+        <div className="relative mt-4 mb-2">
           <FloatChips outcomes={market.outcomes} />
         </div>
       )}
 
       {/* title */}
-      <a href={`/event/${ev.id}`} className="group/h relative mt-3 block min-w-0">
+      <a href={`/event/${ev.id}`} className="group/h relative mt-4 block min-w-0">
         <h2 className="line-clamp-2 min-w-0 text-center font-display text-xl font-bold leading-tight transition group-hover/h:text-gold-deep sm:text-2xl">
           {market.question || ev.title}
         </h2>
@@ -205,24 +205,18 @@ function HeroCard({
         {market.outcomes.length} outcomes · live odds &amp; predictions
       </p>
 
-      {/* ── MINI CHART — slim, fades into card ── */}
-      {(series === null || hasChart) && (
-        <div className="relative -mx-6 mt-2 overflow-hidden opacity-70" style={{ maxHeight: 110 }}>
-          {series === null ? (
-            <div className="flex h-[80px] flex-col justify-center gap-3 px-6 opacity-40">
-              <div className="h-px w-full animate-pulse rounded-full bg-gold/60" />
-              <div className="h-px w-full animate-pulse rounded-full bg-[#3aa3ff]/60" style={{ animationDelay: '0.4s' }} />
-            </div>
-          ) : (
-            <div style={{ marginTop: -10, marginBottom: -20 }}>
-              <PriceChart series={series} compact />
-            </div>
-          )}
-          {/* all-edge fades */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-8" style={{ background: 'linear-gradient(to bottom, var(--color-panel, rgba(18,16,30,1)), transparent)' }} />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14" style={{ background: 'linear-gradient(to top, var(--color-panel, rgba(18,16,30,1)), transparent)' }} />
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-10" style={{ background: 'linear-gradient(to right, var(--color-panel, rgba(18,16,30,1)), transparent)' }} />
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-10" style={{ background: 'linear-gradient(to left, var(--color-panel, rgba(18,16,30,1)), transparent)' }} />
+      {/* ── MINI CHART — fixed 90px tall strip ── */}
+      {hasChart && (
+        <div className="relative -mx-6 mt-3 overflow-hidden" style={{ height: 90 }}>
+          {/* SVG is ~170px tall in compact mode; we shift it up to show the interesting middle part */}
+          <div className="pointer-events-none" style={{ marginTop: -40 }}>
+            <PriceChart series={series!} compact />
+          </div>
+          {/* fade all edges so it dissolves into the card */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-10" style={{ background: 'linear-gradient(to bottom, var(--color-panel,#13111e), transparent)' }} />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10" style={{ background: 'linear-gradient(to top, var(--color-panel,#13111e), transparent)' }} />
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-8" style={{ background: 'linear-gradient(to right, var(--color-panel,#13111e), transparent)' }} />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-8" style={{ background: 'linear-gradient(to left, var(--color-panel,#13111e), transparent)' }} />
         </div>
       )}
 
@@ -232,10 +226,10 @@ function HeroCard({
           <button
             key={o.id}
             onClick={() => onPick(ev, market, o)}
-            className="group/b flex min-w-0 max-w-full items-center gap-2 rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-4 py-2.5 transition hover:border-gold/40 hover:bg-fg/[0.05] active:scale-95"
+            className="group/b flex min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-3 py-2 transition hover:border-gold/40 hover:bg-fg/[0.05] active:scale-95"
           >
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-            <span className="min-w-0 max-w-[140px] truncate text-sm text-fg/85">{o.label}</span>
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+            <span className="min-w-0 max-w-[120px] truncate text-sm text-fg/85">{o.label}</span>
             <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-gold-deep">{pct(o.price)}%</span>
           </button>
         ))}
