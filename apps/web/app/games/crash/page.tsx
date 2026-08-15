@@ -225,10 +225,6 @@ export default function CrashPage() {
             </div>
 
             <style jsx>{`
-              .crash-hud {
-                background: linear-gradient(180deg, rgba(0, 0, 0, 0.28) 0%, transparent 100%);
-                padding-bottom: 1.5rem;
-              }
               .crash-mult-x {
                 background: linear-gradient(180deg, currentColor 0%, currentColor 60%, transparent 140%);
                 -webkit-background-clip: text;

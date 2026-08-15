@@ -24,8 +24,10 @@ const ROCKET_ASPECT = 828 / 1900;
 
 // The rocket flies straight up a fixed vertical lane — no diagonal drift,
 // no body tilt. This matches the classic "RocketX"-style crash visual.
+// Its ceiling is the vertical center of the box (not the top) — same as
+// every other crash game — so it never climbs up toward the HUD number.
 const X_CENTER = 50;
-const Y_MIN = 14;
+const Y_MIN = 48;
 const Y_MAX = 82;
 
 function easeOutCubic(t: number) {
