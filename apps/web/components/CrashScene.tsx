@@ -22,12 +22,11 @@ type Particle = {
 // Natural aspect ratio of the rocket artwork (width / height).
 const ROCKET_ASPECT = 828 / 1900;
 
-// Safe flight zone in percent — the rocket NEVER goes outside this box,
-// so it can't fly off the visible frame regardless of container size.
-const X_MIN = 14;
-const X_MAX = 76;
-const Y_MIN = 20;
-const Y_MAX = 80;
+// The rocket flies straight up a fixed vertical lane — no diagonal drift,
+// no body tilt. This matches the classic "RocketX"-style crash visual.
+const X_CENTER = 50;
+const Y_MIN = 14;
+const Y_MAX = 82;
 
 function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
@@ -41,16 +40,15 @@ function progressFromMultiplier(m: number) {
 
 function pointForProgress(p: number) {
   const t = easeOutCubic(p);
-  const x = X_MIN + t * (X_MAX - X_MIN);
+  const x = X_CENTER;
   const y = Y_MAX - Math.pow(t, 0.82) * (Y_MAX - Y_MIN);
   return { x, y };
 }
 
-const ANGLE_START = 70; // near-vertical liftoff
-const ANGLE_END = 26; // leaning forward at high speed/multiplier
-function angleForProgress(p: number) {
-  const t = easeOutCubic(p);
-  return ANGLE_START + (ANGLE_END - ANGLE_START) * t;
+// Constant 90° = nose straight up. The rocket artwork is drawn upright by
+// default, so no rotation is ever applied — it just climbs the vertical lane.
+function angleForProgress(_p: number) {
+  return 90;
 }
 
 let particleId = 0;
