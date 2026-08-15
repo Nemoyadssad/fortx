@@ -1,21 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { ChevronLeft, ChevronRight, Gamepad2, Gift, Radio, Bomb, Rocket, Layers, TrendingUp, ArrowRight } from 'lucide-react';
 import { pct, fmtMoney } from '@/lib/format';
 import { api } from '@/lib/api';
 import type { EventItem, Market, Outcome } from '@/lib/types';
-// Static asset imports — no `public/` folder needed, the bundler resolves these paths
-// and inlines/hashes the files itself. Put the two images next to this component:
-//   FeaturedHero.tsx
-//   assets/rocket.png
-//   assets/gift-box.png
+import { PriceChart } from '@/components/PriceChart';
+
 import rocketSrc from './assets/rocket.png';
 import giftBoxSrc from './assets/gift-box.png';
 
-// Next.js's static image import returns an object ({ src, width, height }); Vite/CRA
-// return a plain string. This works with either without you having to change anything.
 const rocketUrl = typeof rocketSrc === 'string' ? rocketSrc : (rocketSrc as { src: string }).src;
 const giftBoxUrl = typeof giftBoxSrc === 'string' ? giftBoxSrc : (giftBoxSrc as { src: string }).src;
 
@@ -43,6 +38,38 @@ const tradable = (o: Outcome) => {
   const p = parseFloat(o.price);
   return p > 0 && p < 1;
 };
+
+type ChartSeries = { label: string; price: number; points: { t: number; p: number }[] };
+
+/** Cache market histories so switching slides doesn't re-fetch */
+const historyCache = new Map<string, ChartSeries[]>();
+
+/** Loads and caches market history, returns series or null while loading */
+function useMarketHistory(marketId: string | undefined) {
+  const [series, setSeries] = useState<ChartSeries[] | null>(null);
+
+  useEffect(() => {
+    if (!marketId) return;
+    if (historyCache.has(marketId)) {
+      setSeries(historyCache.get(marketId)!);
+      return;
+    }
+    setSeries(null);
+    api.marketHistory(marketId)
+      .then((d: any) => {
+        const raw: ChartSeries[] = Array.isArray(d?.outcomes) ? d.outcomes : [];
+        const ds = raw.map((s) => {
+          const step = Math.max(1, Math.ceil(s.points.length / 120));
+          return { ...s, points: s.points.filter((_: any, i: number) => i % step === 0) };
+        });
+        historyCache.set(marketId, ds);
+        setSeries(ds);
+      })
+      .catch(() => setSeries([]));
+  }, [marketId]);
+
+  return series;
+}
 
 /** Floating chips (flags or colored initials) with their implied %. */
 function FloatChips({ outcomes }: { outcomes: Outcome[] }) {
@@ -82,7 +109,6 @@ const CASINO_GAMES = [
   { name: 'Ladder', icon: TrendingUp, href: '/games/ladder', color: '#8a6cff' },
 ];
 
-/** 2x2 grid of dark glass game tiles, each a real link to its game route. */
 function GameTiles() {
   return (
     <div className="relative z-10 mt-5 grid grid-cols-2 gap-2">
@@ -108,9 +134,6 @@ function GameTiles() {
   );
 }
 
-/** Rocket artwork — real image asset, tucked into the empty top-right corner ABOVE the
- *  game tiles so it never bleeds behind them. Faded on its lower/left edge so the crop
- *  reads as atmosphere rather than a pasted rectangle. */
 function RocketArt() {
   return (
     <img
@@ -126,7 +149,6 @@ function RocketArt() {
   );
 }
 
-/** Gift box artwork — real image asset, bleeding off the bottom-right of the card. */
 function GiftArt() {
   return (
     <img
@@ -135,6 +157,100 @@ function GiftArt() {
       aria-hidden="true"
       className="pointer-events-none absolute -bottom-8 -right-10 h-[230px] w-[260px] object-contain object-bottom mix-blend-lighten opacity-95 sm:h-[260px] sm:w-[290px]"
     />
+  );
+}
+
+/** Mini chart skeleton while loading */
+function ChartSkeleton() {
+  return (
+    <div className="flex h-[110px] items-center justify-center">
+      <div className="h-[2px] w-3/4 animate-pulse rounded-full bg-fg/[0.06]" />
+    </div>
+  );
+}
+
+/** The hero card inner content — extracted so we can key it for smooth transitions */
+function HeroCard({
+  ev,
+  market,
+  onPick,
+}: {
+  ev: EventItem;
+  market: Market;
+  onPick: (e: EventItem, m: Market, o: Outcome) => void;
+}) {
+  const series = useMarketHistory(market?.id);
+  const top = market.outcomes.filter(tradable).slice(0, 2);
+  const hasChart = series && series.length > 0 && series.some((s) => s.points.length >= 2);
+
+  return (
+    <>
+      {/* category + live */}
+      <div className="relative flex items-center gap-2 text-[11px] text-fg/45">
+        {ev.category && (
+          <span className="rounded bg-fg/[0.05] px-1.5 py-0.5 font-mono uppercase tracking-wider">{ev.category}</span>
+        )}
+        <span className="flex items-center gap-1 text-lose">
+          <Radio className="h-3 w-3 animate-pulseDot" /> LIVE
+        </span>
+      </div>
+
+      {/* floating flags — only show when no chart, to save vertical space */}
+      {!hasChart && (
+        <div className="relative mt-4 mb-3">
+          <FloatChips outcomes={market.outcomes} />
+        </div>
+      )}
+
+      {/* title */}
+      <a href={`/event/${ev.id}`} className="group/h relative mt-3 block min-w-0">
+        <h2 className="line-clamp-2 min-w-0 text-center font-display text-xl font-bold leading-tight transition group-hover/h:text-gold-deep sm:text-2xl">
+          {market.question || ev.title}
+        </h2>
+      </a>
+      <p className="relative mt-1 text-center text-xs text-fg/40">
+        {market.outcomes.length} outcomes · live odds &amp; predictions
+      </p>
+
+      {/* ── MINI CHART ── */}
+      <div className="relative mt-3 min-w-0 overflow-hidden rounded-xl border border-fg/[0.06] bg-fg/[0.02]">
+        {series === null ? (
+          <ChartSkeleton />
+        ) : hasChart ? (
+          <div className="px-1 pt-1 pb-0">
+            <PriceChart series={series} compact />
+          </div>
+        ) : (
+          /* no history — show a flat placeholder line */
+          <div className="flex h-[80px] items-center justify-center gap-2 text-[11px] text-fg/25">
+            <span className="h-px w-12 bg-fg/10 rounded-full" />
+            No price history yet
+            <span className="h-px w-12 bg-fg/10 rounded-full" />
+          </div>
+        )}
+      </div>
+
+      {/* quick picks */}
+      <div className="relative mt-auto flex min-w-0 flex-wrap items-center justify-center gap-2 pt-4">
+        {top.map((o, i) => (
+          <button
+            key={o.id}
+            onClick={() => onPick(ev, market, o)}
+            className="group/b flex min-w-0 max-w-full items-center gap-2 rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-4 py-2.5 transition hover:border-gold/40 hover:bg-fg/[0.05] active:scale-95"
+          >
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+            <span className="min-w-0 max-w-[140px] truncate text-sm text-fg/85">{o.label}</span>
+            <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-gold-deep">{pct(o.price)}%</span>
+          </button>
+        ))}
+        <a
+          href={`/event/${ev.id}`}
+          className="shrink-0 rounded-xl bg-gradient-to-b from-gold to-gold-soft px-4 py-2.5 text-sm font-bold text-black shadow-gold transition hover:brightness-105"
+        >
+          View market →
+        </a>
+      </div>
+    </>
   );
 }
 
@@ -161,125 +277,94 @@ export function FeaturedHero({
 
   useEffect(() => {
     if (featured.length <= 1 || paused) return;
-    const t = setInterval(() => setIdx((i) => (i + 1) % featured.length), 6000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setIdx((i) => (i + 1) % featured.length), 6000);
+    return () => clearInterval(timer);
   }, [featured.length, paused]);
 
   if (featured.length === 0) return null;
   const ev = featured[Math.min(idx, featured.length - 1)];
   const market = ev?.markets?.[0];
   if (!ev || !market) return null;
-  const top = market.outcomes.filter(tradable).slice(0, 2);
 
   return (
     <section className="mx-auto max-w-7xl px-5 pt-6">
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        {/* animated featured hero */}
+
+        {/* ── animated featured hero ── */}
         <div
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
-          className="relative flex min-h-[330px] min-w-0 flex-col overflow-hidden rounded-3xl border border-gold/20 bg-gradient-to-br from-panel2 via-panel to-bg p-6 shadow-panel"
+          className="relative flex min-h-[380px] min-w-0 flex-col overflow-hidden rounded-3xl border border-gold/20 bg-gradient-to-br from-panel2 via-panel to-bg p-6 shadow-panel"
         >
-          {/* ambient glows + slow rotating ring */}
+          {/* ambient glows */}
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-gold/10 blur-3xl" />
           <div className="pointer-events-none absolute -left-20 bottom-0 h-56 w-56 rounded-full bg-[#3aa3ff]/10 blur-3xl" />
           <div className="animate-spin-slow pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full border border-dashed border-fg/[0.06]" />
 
-          {/* category + live */}
-          <div className="relative flex items-center gap-2 text-[11px] text-fg/45">
-            {ev.category && (
-              <span className="rounded bg-fg/[0.05] px-1.5 py-0.5 font-mono uppercase tracking-wider">{ev.category}</span>
-            )}
-            <span className="flex items-center gap-1 text-lose"><Radio className="h-3 w-3 animate-pulseDot" /> LIVE</span>
-          </div>
-
-          {/* floating flags / outcomes */}
-          <div className="relative mt-6 mb-5">
-            <FloatChips outcomes={market.outcomes} />
-          </div>
-
-          {/* title */}
-          <a href={`/event/${ev.id}`} className="group/h relative min-w-0">
-            <h2 className="line-clamp-2 min-w-0 text-center font-display text-2xl font-bold leading-tight transition group-hover/h:text-gold-deep sm:text-3xl">
-              {market.question || ev.title}
-            </h2>
-          </a>
-          <p className="relative mt-2 text-center text-sm text-fg/45">
-            {market.outcomes.length} outcomes · live odds & predictions
-          </p>
-
-          {/* quick picks */}
-          <div className="relative mt-auto flex min-w-0 flex-wrap items-center justify-center gap-2 pt-5">
-            {top.map((o, i) => (
-              <button
-                key={o.id}
-                onClick={() => onPick(ev, market, o)}
-                className="group/b flex min-w-0 max-w-full items-center gap-2 rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-4 py-2.5 transition hover:border-gold/40 hover:bg-fg/[0.05]"
-              >
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                <span className="min-w-0 max-w-[160px] truncate text-sm text-fg/85">{o.label}</span>
-                <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-gold-deep">{pct(o.price)}%</span>
-              </button>
-            ))}
-            <a href={`/event/${ev.id}`} className="shrink-0 rounded-xl bg-gradient-to-b from-gold to-gold-soft px-4 py-2.5 text-sm font-bold text-black shadow-gold transition hover:brightness-105">
-              View market →
-            </a>
-          </div>
+          {/* keyed so PriceChart re-mounts (and re-animates) when slide changes */}
+          <HeroCard key={ev.id + market.id} ev={ev} market={market} onPick={onPick} />
 
           {/* carousel controls */}
           {featured.length > 1 && (
             <div className="relative mt-4 flex items-center justify-center gap-3">
-              <button onClick={() => setIdx((i) => (i - 1 + featured.length) % featured.length)} className="rounded-full border hairline p-1.5 text-fg/50 transition hover:text-fg" aria-label="Previous">
+              <button
+                onClick={() => setIdx((i) => (i - 1 + featured.length) % featured.length)}
+                className="rounded-full border hairline p-1.5 text-fg/50 transition hover:text-fg"
+                aria-label="Previous"
+              >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <div className="flex gap-1.5">
                 {featured.map((_, i) => (
-                  <button key={i} onClick={() => setIdx(i)} className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-6 bg-gold' : 'w-1.5 bg-fg/20 hover:bg-fg/40'}`} aria-label={`Go to ${i + 1}`} />
+                  <button
+                    key={i}
+                    onClick={() => setIdx(i)}
+                    className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-6 bg-gold' : 'w-1.5 bg-fg/20 hover:bg-fg/40'}`}
+                    aria-label={`Go to ${i + 1}`}
+                  />
                 ))}
               </div>
-              <button onClick={() => setIdx((i) => (i + 1) % featured.length)} className="rounded-full border hairline p-1.5 text-fg/50 transition hover:text-fg" aria-label="Next">
+              <button
+                onClick={() => setIdx((i) => (i + 1) % featured.length)}
+                className="rounded-full border hairline p-1.5 text-fg/50 transition hover:text-fg"
+                aria-label="Next"
+              >
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           )}
         </div>
 
-        {/* promo sidebar */}
+        {/* ── promo sidebar (unchanged) ── */}
         <div className="flex min-w-0 flex-col gap-4">
-          {/* CASINO PROMO — dark card, rocket bleeding off the right edge */}
+          {/* CASINO PROMO */}
           <a
             href="/games"
             className="group/casino relative flex min-w-0 min-h-[300px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#0d0b16] p-6 shadow-panel transition hover:border-white/20"
           >
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#1a1330] via-[#0d0b16] to-[#0d0b16]" />
             <div className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full bg-[#7c5cff]/25 blur-3xl" />
-
             <RocketArt />
-
             <div className="relative z-10 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-b from-[#8a6cff] to-[#6f54e0] shadow-lg shadow-[#6f54e0]/30">
               <Gamepad2 className="h-5 w-5 text-white" />
             </div>
             <h3 className="relative z-10 mt-3 font-display text-xl font-bold leading-tight text-white">
-              {t('home.casinoTitle') || 'Игры казино'}
+              {t('home.casinoTitle') || 'Casino Games'}
             </h3>
             <p className="relative z-10 mt-1 max-w-[70%] text-sm text-white/55">
               Mines, Crash, Tower &amp; Ladder — fast, provably-fair rounds.
             </p>
-
             <GameTiles />
-
             <span className="relative z-10 mt-4 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#8a6cff] to-[#6f54e0] py-2.5 text-center font-bold text-white transition group-hover/casino:brightness-110">
-              {t('common.playNow') || 'Играть'}
+              {t('common.playNow') || 'Play now'}
             </span>
           </a>
 
-          {/* BONUS PROMO — gold card, gift box bleeding off the right edge */}
+          {/* BONUS PROMO */}
           <div className="relative flex min-w-0 min-h-[220px] flex-col overflow-hidden rounded-3xl border border-gold/20 bg-[#0d0b16] p-6">
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#231d10] via-[#0d0b16] to-[#0d0b16]" />
             <div className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full bg-gold/20 blur-3xl" />
-
             <GiftArt />
-
             <Gift className="relative z-10 h-7 w-7 text-gold-deep" />
             <h3 className="relative z-10 mt-3 max-w-[75%] font-display text-xl font-bold leading-tight text-white">
               <span className="gold-text">{fmtMoney(welcome)} free</span> to start
@@ -290,14 +375,14 @@ export function FeaturedHero({
             {email ? (
               <a
                 href="#markets"
-                className="relative z-10 mt-4 flex w-fit items-center gap-2 rounded-xl border border-gold/40 px-4 py-2.5 text-center font-bold text-gold-deep transition hover:bg-gold/10"
+                className="relative z-10 mt-4 flex w-fit items-center gap-2 rounded-xl border border-gold/40 px-4 py-2.5 font-bold text-gold-deep transition hover:bg-gold/10"
               >
                 Browse markets <ArrowRight className="h-4 w-4" />
               </a>
             ) : (
               <button
                 onClick={requireAuth}
-                className="relative z-10 mt-4 flex w-fit items-center gap-2 rounded-xl border border-gold/40 px-4 py-2.5 text-center font-bold text-gold-deep transition hover:bg-gold/10"
+                className="relative z-10 mt-4 flex w-fit items-center gap-2 rounded-xl border border-gold/40 px-4 py-2.5 font-bold text-gold-deep transition hover:bg-gold/10"
               >
                 Browse markets <ArrowRight className="h-4 w-4" />
               </button>
