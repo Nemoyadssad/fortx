@@ -115,7 +115,6 @@ export default function CrashPage() {
         if (s.status === 'crashed') {
           finishCrash(s.crashPoint);
         } else if (s.status === 'flying') {
-          // keep the local rocket honest with server truth
           startRef.current = Date.now() - elapsedForMult(s.multiplier) * 1000;
         }
       } catch {
@@ -196,19 +195,60 @@ export default function CrashPage() {
             />
             <div className="relative z-10 mb-8 text-center sm:mb-10">
               <p
-                className={`font-display text-5xl font-bold tabular-nums drop-shadow-[0_0_20px_rgba(0,0,0,0.6)] sm:text-6xl lg:text-7xl ${color}`}
+                className={`crash-mult font-display text-5xl font-bold tabular-nums drop-shadow-[0_0_20px_rgba(0,0,0,0.6)] sm:text-6xl lg:text-7xl ${color} ${
+                  active ? 'crash-mult--live' : ''
+                } ${result ? (result.won ? 'crash-mult--win' : 'crash-mult--lose') : ''}`}
               >
                 {display.toFixed(2)}
-                <span className="text-2xl sm:text-3xl lg:text-4xl">x</span>
+                <span className="crash-mult-x text-2xl sm:text-3xl lg:text-4xl">x</span>
               </p>
               {result && (
-                <p className="mt-2 text-sm font-semibold text-fg/60 drop-shadow-[0_0_10px_rgba(0,0,0,0.8)]">
+                <p className="crash-result-pop mt-2 text-sm font-semibold text-fg/60 drop-shadow-[0_0_10px_rgba(0,0,0,0.8)]">
                   {result.won
                     ? `Cashed out · ${fmtMoney(result.payout ?? 0)}`
                     : `Crashed @ x${result.crashPoint.toFixed(2)}`}
                 </p>
               )}
             </div>
+
+            <style jsx>{`
+              .crash-mult-x {
+                background: linear-gradient(180deg, currentColor 0%, currentColor 60%, transparent 140%);
+                -webkit-background-clip: text;
+                background-clip: text;
+                opacity: 0.75;
+              }
+              .crash-mult--live {
+                animation: crash-mult-pulse 0.9s ease-in-out infinite;
+              }
+              @keyframes crash-mult-pulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.035); }
+              }
+              .crash-mult--win {
+                animation: crash-mult-pop 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.4);
+              }
+              .crash-mult--lose {
+                animation: crash-mult-shake 0.4s ease-in-out;
+              }
+              @keyframes crash-mult-pop {
+                0% { transform: scale(0.7); opacity: 0.4; }
+                60% { transform: scale(1.15); }
+                100% { transform: scale(1); opacity: 1; }
+              }
+              @keyframes crash-mult-shake {
+                0%, 100% { transform: translateX(0); }
+                25% { transform: translateX(-6px); }
+                75% { transform: translateX(6px); }
+              }
+              .crash-result-pop {
+                animation: crash-result-fade 0.4s ease-out;
+              }
+              @keyframes crash-result-fade {
+                from { opacity: 0; transform: translateY(-4px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+            `}</style>
           </div>
 
           {/* bet panel */}

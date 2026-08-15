@@ -46,13 +46,6 @@ function pointForProgress(p: number) {
   return { x, y };
 }
 
-// Angle of ascent (0 = flying dead right, 90 = flying straight up), as a
-// deterministic function of progress rather than a numeric derivative of
-// trail points. A numeric derivative degenerates to (0,0) right at launch
-// (the "behind" point and the current point coincide), which produced a
-// jittery, sometimes near-flat/"lying down" rotation. This version is
-// smooth, jitter-free, and clamped so the rocket always stays tilted
-// between a steep climb and a forward lean — never flat, never flipped.
 const ANGLE_START = 70; // near-vertical liftoff
 const ANGLE_END = 26; // leaning forward at high speed/multiplier
 function angleForProgress(p: number) {
@@ -85,11 +78,16 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
     return () => ro.disconnect();
   }, []);
 
-  // Rocket height is a healthy chunk of the smaller box dimension, clamped
-  // to sane min/max so it looks right on a tiny phone or a wide desktop card.
   const rocketH = Math.min(Math.max(Math.min(box.w, box.h) * 0.24, 30), 92);
   const rocketW = rocketH * ROCKET_ASPECT;
-  const scale = rocketH / 150; // baseline scale factor for glow/flame
+  const scale = rocketH / 150;
+
+  // Keep a ref to the live position/angle so intervals always read fresh
+  // values instead of a stale snapshot from when the effect was created.
+  const posRef = useRef({ x, y, angleDeg, progress });
+  useEffect(() => {
+    posRef.current = { x, y, angleDeg, progress };
+  }, [x, y, angleDeg, progress]);
 
   const trailRef = useRef<{ x: number; y: number }[]>([]);
   const [, forceTick] = useState(0);
@@ -98,18 +96,22 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
     const last = trail[trail.length - 1];
     if (!last || Math.hypot(last.x - x, last.y - y) > 0.6) {
       trail.push({ x, y });
-      if (trail.length > 40) trail.shift();
+      if (trail.length > 60) trail.shift();
     }
   }
 
   const [embers, setEmbers] = useState<Particle[]>([]);
   const [debris, setDebris] = useState<Particle[]>([]);
+  const [smoke, setSmoke] = useState<Particle[]>([]);
   const [sparkles, setSparkles] = useState<Particle[]>([]);
+  const [shockwave, setShockwave] = useState(false);
   const [shake, setShake] = useState(false);
   const prevCrashed = useRef(false);
   const prevCashed = useRef(false);
   const emberTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Engine exhaust — now anchored to the ref, so it always trails the
+  // rocket's real current position instead of where it was when flight started.
   useEffect(() => {
     if (!active) {
       if (emberTimer.current) clearInterval(emberTimer.current);
@@ -117,23 +119,25 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
       return;
     }
     emberTimer.current = setInterval(() => {
-      const backRad = (angleDeg * Math.PI) / 180 + Math.PI;
+      const { x: cx, y: cy, angleDeg: cAngle, progress: cProg } = posRef.current;
+      const backRad = (cAngle * Math.PI) / 180 + Math.PI;
+      const speed = 0.3 + cProg * 0.5; // exhaust gets punchier as the rocket accelerates
       setEmbers((prev) => {
         const next = prev
           .map((p) => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, size: p.size * 0.9 }))
           .filter((p) => p.size > 0.15);
         next.push({
           id: particleId++,
-          x: x + Math.cos(backRad) * 2.4,
-          y: y + Math.sin(backRad) * 2.4,
-          vx: Math.cos(backRad) * 0.35 + (Math.random() - 0.5) * 0.2,
-          vy: Math.sin(backRad) * 0.35 + (Math.random() - 0.5) * 0.2,
+          x: cx + Math.cos(backRad) * 2.4,
+          y: cy + Math.sin(backRad) * 2.4,
+          vx: Math.cos(backRad) * speed + (Math.random() - 0.5) * 0.22,
+          vy: Math.sin(backRad) * speed + (Math.random() - 0.5) * 0.22,
           color: Math.random() > 0.5 ? '#c96bff' : '#ff8ee6',
-          size: 0.9 + Math.random() * 0.7,
+          size: 0.9 + Math.random() * 0.8,
         });
-        return next.slice(-26);
+        return next.slice(-34);
       });
-    }, 55);
+    }, 45);
     return () => {
       if (emberTimer.current) clearInterval(emberTimer.current);
     };
@@ -143,9 +147,9 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
   useEffect(() => {
     if (crashed && !prevCrashed.current) {
       prevCrashed.current = true;
-      const burst: Particle[] = Array.from({ length: 22 }).map(() => {
+      const burst: Particle[] = Array.from({ length: 30 }).map(() => {
         const a = Math.random() * Math.PI * 2;
-        const speed = 0.5 + Math.random() * 1.1;
+        const speed = 0.5 + Math.random() * 1.3;
         return {
           id: particleId++,
           x,
@@ -153,16 +157,35 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
           vx: Math.cos(a) * speed,
           vy: Math.sin(a) * speed,
           color: Math.random() > 0.4 ? '#ff5d5d' : '#ffb84d',
-          size: 1.4 + Math.random() * 1.8,
+          size: 1.4 + Math.random() * 2,
+        };
+      });
+      const smokeBurst: Particle[] = Array.from({ length: 10 }).map(() => {
+        const a = Math.random() * Math.PI * 2;
+        const speed = 0.15 + Math.random() * 0.35;
+        return {
+          id: particleId++,
+          x,
+          y,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed - 0.25,
+          color: '#8a8a99',
+          size: 3 + Math.random() * 3,
         };
       });
       setDebris(burst);
+      setSmoke(smokeBurst);
+      setShockwave(true);
       setShake(true);
       const t1 = setTimeout(() => setDebris([]), 900);
       const t2 = setTimeout(() => setShake(false), 420);
+      const t3 = setTimeout(() => setSmoke([]), 1400);
+      const t4 = setTimeout(() => setShockwave(false), 700);
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
+        clearTimeout(t3);
+        clearTimeout(t4);
       };
     }
     if (!crashed) prevCrashed.current = false;
@@ -171,21 +194,21 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
   useEffect(() => {
     if (cashedOut && !prevCashed.current) {
       prevCashed.current = true;
-      const burst: Particle[] = Array.from({ length: 16 }).map(() => {
+      const burst: Particle[] = Array.from({ length: 26 }).map(() => {
         const a = Math.random() * Math.PI * 2;
-        const speed = 0.35 + Math.random() * 0.85;
+        const speed = 0.35 + Math.random() * 1.0;
         return {
           id: particleId++,
           x,
           y,
           vx: Math.cos(a) * speed,
-          vy: Math.sin(a) * speed - 0.3,
-          color: Math.random() > 0.5 ? '#ffd76a' : '#5eeaa0',
-          size: 1 + Math.random() * 1.6,
+          vy: Math.sin(a) * speed - 0.35,
+          color: Math.random() > 0.45 ? '#ffd76a' : '#5eeaa0',
+          size: 1 + Math.random() * 1.8,
         };
       });
       setSparkles(burst);
-      const t = setTimeout(() => setSparkles([]), 1000);
+      const t = setTimeout(() => setSparkles([]), 1100);
       return () => clearTimeout(t);
     }
     if (!cashedOut) prevCashed.current = false;
@@ -196,7 +219,9 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
       trailRef.current = [];
       setEmbers([]);
       setDebris([]);
+      setSmoke([]);
       setSparkles([]);
+      setShockwave(false);
       prevCrashed.current = false;
       prevCashed.current = false;
     }
@@ -219,6 +244,21 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
     [],
   );
 
+  // Warp streaks that intensify as the multiplier climbs — the "sense of
+  // speed" that sells acceleration far better than a static starfield.
+  const warpLines = useMemo(
+    () =>
+      Array.from({ length: 14 }).map((_, i) => ({
+        id: i,
+        x: Math.random() * 100,
+        y: Math.random() * 90,
+        len: 4 + Math.random() * 10,
+        delay: Math.random() * 1.2,
+        dur: 0.5 + Math.random() * 0.7,
+      })),
+    [],
+  );
+
   const glowColor = crashed ? '#ff5d5d' : cashedOut ? '#5eeaa0' : '#b866ff';
   const trailColor = crashed ? '#ff5d5d' : cashedOut ? '#5eeaa0' : '#c96bff';
   const showRocket = active || crashed || cashedOut;
@@ -232,13 +272,19 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
         )
       : '';
 
+  // Same points as the stroke, but closed down to a baseline so it can be
+  // filled — this is the "glowing wedge under the curve" look crash games use.
+  const trailFillPath =
+    trail.length > 1
+      ? `${trailPath} L ${trail[trail.length - 1].x} ${Y_MAX + 10} L ${trail[0].x} ${Y_MAX + 10} Z`
+      : '';
+
   return (
     <div
       ref={containerRef}
       className={`absolute inset-0 overflow-hidden ${shake ? 'animate-crashScene-shake' : ''}`}
       style={{ willChange: 'transform' }}
     >
-      {/* background layer — stretches exactly to the container, no cropping */}
       <svg
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
@@ -248,6 +294,10 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
           <linearGradient id="trailGrad" x1="0%" y1="100%" x2="100%" y2="0%">
             <stop offset="0%" stopColor={trailColor} stopOpacity="0" />
             <stop offset="100%" stopColor={trailColor} stopOpacity="0.95" />
+          </linearGradient>
+          <linearGradient id="trailFillGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={trailColor} stopOpacity="0.32" />
+            <stop offset="100%" stopColor={trailColor} stopOpacity="0" />
           </linearGradient>
           <radialGradient id="nebula" cx="24%" cy="94%" r="80%">
             <stop offset="0%" stopColor="#3a2a6a" stopOpacity="0.4" />
@@ -269,7 +319,26 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
           />
         ))}
 
+        {active &&
+          warpLines.map((w) => (
+            <line
+              key={w.id}
+              x1={w.x}
+              y1={w.y}
+              x2={w.x}
+              y2={w.y + w.len}
+              stroke="#ffffff"
+              strokeWidth="0.18"
+              strokeLinecap="round"
+              opacity={0.05 + progress * 0.35}
+              className="animate-crashScene-warp"
+              style={{ animationDelay: `${w.delay}s`, animationDuration: `${w.dur}s` }}
+            />
+          ))}
+
         <line x1="0" y1={Y_MAX + 8} x2="100" y2={Y_MAX + 8} stroke="#ffffff" strokeOpacity="0.06" strokeWidth="0.3" />
+
+        {trailFillPath && <path d={trailFillPath} fill="url(#trailFillGrad)" stroke="none" />}
 
         {trailPath && (
           <path
@@ -285,6 +354,19 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
 
         {embers.map((p) => (
           <circle key={p.id} cx={p.x} cy={p.y} r={p.size * 0.4} fill={p.color} opacity={0.8} />
+        ))}
+
+        {smoke.map((p) => (
+          <circle
+            key={p.id}
+            cx={p.x}
+            cy={p.y}
+            r={p.size * 0.5}
+            fill={p.color}
+            opacity={0.35}
+            className="animate-crashScene-smoke"
+            style={{ '--dx': `${p.vx * 20}%`, '--dy': `${p.vy * 20}%` } as React.CSSProperties}
+          />
         ))}
 
         {debris.map((p) => (
@@ -312,13 +394,35 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
         ))}
 
         {crashed && (
-          <circle cx={x} cy={y} r="1.4" fill="#ff9d4d" className="animate-crashScene-flash" />
+          <>
+            <circle cx={x} cy={y} r="1.4" fill="#ff9d4d" className="animate-crashScene-flash" />
+            {shockwave && (
+              <>
+                <circle
+                  cx={x}
+                  cy={y}
+                  r="1.2"
+                  fill="none"
+                  stroke="#ff5d5d"
+                  strokeWidth="0.6"
+                  className="animate-crashScene-shockwave"
+                />
+                <circle
+                  cx={x}
+                  cy={y}
+                  r="1.2"
+                  fill="none"
+                  stroke="#ffb84d"
+                  strokeWidth="0.4"
+                  className="animate-crashScene-shockwave"
+                  style={{ animationDelay: '0.08s' }}
+                />
+              </>
+            )}
+          </>
         )}
       </svg>
 
-      {/* rocket — real brand artwork, sized proportionally to the actual
-          measured container so it always looks right on any screen size,
-          and positioned by percent so it never flies outside the frame */}
       {showRocket && !crashed && (
         <div
           className="absolute"
@@ -331,7 +435,6 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
             transition: active ? 'none' : 'left 0.25s ease, top 0.25s ease',
           }}
         >
-          {/* neon halo behind the rocket */}
           <div
             className="absolute rounded-full blur-xl"
             style={{
@@ -344,27 +447,32 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
             }}
           />
 
-          {/* engine flame, anchored to the tail (bottom of the artwork) */}
           {active && (
             <div
               className="absolute left-1/2 animate-crashScene-flame"
               style={{
                 bottom: -rocketH * 0.02,
-                width: rocketW * 0.55,
-                height: rocketH * 0.3,
+                width: rocketW * 0.65,
+                height: rocketH * 0.36,
                 transform: 'translateX(-50%)',
                 transformOrigin: 'top center',
               }}
             >
               <svg width="100%" height="100%" viewBox="0 0 26 34" preserveAspectRatio="none">
                 <defs>
-                  <linearGradient id="flameGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#fff3c4" />
-                    <stop offset="45%" stopColor="#ffb84d" />
+                  <linearGradient id="flameGradOuter" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#ffe9b0" stopOpacity="0.9" />
+                    <stop offset="45%" stopColor="#ff9d4d" stopOpacity="0.8" />
                     <stop offset="100%" stopColor="#c96bff" stopOpacity="0" />
                   </linearGradient>
+                  <linearGradient id="flameGradInner" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#ffffff" />
+                    <stop offset="50%" stopColor="#ffd76a" />
+                    <stop offset="100%" stopColor="#ff8ee6" stopOpacity="0" />
+                  </linearGradient>
                 </defs>
-                <path d="M 13 0 C 18 8 24 14 13 34 C 2 14 8 8 13 0 Z" fill="url(#flameGrad)" />
+                <path d="M 13 2 C 20 10 25 16 13 34 C 1 16 6 10 13 2 Z" fill="url(#flameGradOuter)" />
+                <path d="M 13 8 C 17 14 19 18 13 30 C 7 18 9 14 13 8 Z" fill="url(#flameGradInner)" />
               </svg>
             </div>
           )}
@@ -392,12 +500,23 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
           animation-iteration-count: infinite;
         }
 
+        @keyframes crashScene-warp {
+          0% { transform: translateY(-4px); opacity: 0; }
+          40% { opacity: 1; }
+          100% { transform: translateY(10px); opacity: 0; }
+        }
+        .animate-crashScene-warp {
+          animation-name: crashScene-warp;
+          animation-timing-function: ease-in;
+          animation-iteration-count: infinite;
+        }
+
         @keyframes crashScene-flame {
           0%, 100% { transform: translateX(-50%) scaleY(1) scaleX(1); opacity: 0.95; }
-          50% { transform: translateX(-50%) scaleY(1.18) scaleX(0.88); opacity: 1; }
+          50% { transform: translateX(-50%) scaleY(1.2) scaleX(0.86); opacity: 1; }
         }
         .animate-crashScene-flame {
-          animation: crashScene-flame 0.14s ease-in-out infinite;
+          animation: crashScene-flame 0.12s ease-in-out infinite;
         }
 
         @keyframes crashScene-debris {
@@ -406,6 +525,16 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
         }
         .animate-crashScene-debris {
           animation: crashScene-debris 0.85s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+          transform-box: fill-box;
+          transform-origin: center;
+        }
+
+        @keyframes crashScene-smoke {
+          0% { transform: translate(0, 0) scale(0.6); opacity: 0.4; }
+          100% { transform: translate(var(--dx), var(--dy)) scale(2.2); opacity: 0; }
+        }
+        .animate-crashScene-smoke {
+          animation: crashScene-smoke 1.3s ease-out forwards;
           transform-box: fill-box;
           transform-origin: center;
         }
@@ -427,6 +556,14 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
         }
         .animate-crashScene-flash {
           animation: crashScene-flash 0.5s ease-out forwards;
+        }
+
+        @keyframes crashScene-shockwave {
+          0% { r: 1.2; opacity: 0.9; stroke-width: 0.6; }
+          100% { r: 18; opacity: 0; stroke-width: 0.05; }
+        }
+        .animate-crashScene-shockwave {
+          animation: crashScene-shockwave 0.6s cubic-bezier(0.1, 0.6, 0.3, 1) forwards;
         }
 
         @keyframes crashScene-shake {
