@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { Prisma, AccountType, BetStatus, TxnKind } from '@prisma/client';
+import { Prisma, AccountType, BetStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { SettingsService } from '../settings/settings.service';
@@ -257,7 +257,7 @@ export class WalletService {
   async withdraw(
     userId: string,
     amount: Prisma.Decimal.Value,
-    opts: { actorId?: string; reference?: string } = {},
+    opts: { actorId?: string; reference?: string; idempotencyKey?: string } = {},
   ) {
     const amt = new Prisma.Decimal(amount);
     if (amt.lte(0)) throw new BadRequestException('Withdrawal must be positive.');
@@ -270,6 +270,7 @@ export class WalletService {
         kind: 'WITHDRAWAL',
         createdById: opts.actorId,
         reference: opts.reference,
+        idempotencyKey: opts.idempotencyKey,
         legs: [
           { accountId: cash.id, amount: amt.negated() },
           { accountId: wd.id, amount: amt },
@@ -420,84 +421,100 @@ export class WalletService {
    * Losers: their staked escrow becomes house revenue.
    */
   async settleMarket(marketId: string, winningOutcomeId: string, actorId?: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const market = await tx.market.findUniqueOrThrow({ where: { id: marketId } });
-      if (market.status === 'RESOLVED') {
-        throw new BadRequestException('Market is already resolved.');
-      }
-
-      const escrow = await this.system(tx, AccountType.SYSTEM_ESCROW);
-      const house = await this.system(tx, AccountType.SYSTEM_HOUSE);
-
-      const openBets = await tx.bet.findMany({ where: { marketId, status: 'OPEN' } });
-
-      for (const bet of openBets) {
-        const cash = await this.userCash(tx, bet.userId);
-
-        if (bet.outcomeId === winningOutcomeId) {
-          const profitFromHouse = bet.potentialPayout.sub(bet.stake);
-          await this.ledger.postWithin(tx, {
-            kind: 'BET_SETTLE_WIN',
-            reference: bet.id,
-            createdById: actorId,
-            legs: [
-              { accountId: escrow.id, amount: bet.stake.negated() },
-              { accountId: house.id, amount: profitFromHouse.negated() },
-              { accountId: cash.id, amount: bet.potentialPayout },
-            ],
-          });
-          await tx.bet.update({
-            where: { id: bet.id },
-            data: { status: 'WON', settledAt: new Date() },
-          });
-        } else {
-          await this.ledger.postWithin(tx, {
-            kind: 'BET_SETTLE_LOSS',
-            reference: bet.id,
-            createdById: actorId,
-            legs: [
-              { accountId: escrow.id, amount: bet.stake.negated() },
-              { accountId: house.id, amount: bet.stake },
-            ],
-          });
-          await tx.bet.update({
-            where: { id: bet.id },
-            data: { status: 'LOST', settledAt: new Date() },
-          });
-        }
-      }
-
-      await tx.market.update({
-        where: { id: marketId },
-        data: { status: 'RESOLVED', resolvedOutcomeId: winningOutcomeId },
-      });
-      await tx.auditLog.create({
-        data: {
-          actorId,
-          action: 'MARKET_RESOLVED',
-          targetType: 'Market',
-          targetId: marketId,
-          metadata: { winningOutcomeId, settled: openBets.length },
-        },
-      });
-
-      return { resolved: openBets.length };
+    // Шаг 1: атомарный CAS рынка OPEN -> RESOLVED. Гарантирует, что только
+    // один параллельный вызов settleMarket пройдёт дальше этой точки.
+    const { count } = await this.prisma.market.updateMany({
+      where: { id: marketId, status: 'OPEN' },
+      data: { status: 'RESOLVED', resolvedOutcomeId: winningOutcomeId },
     });
+    if (count === 0) {
+      throw new BadRequestException('Market is already resolved or not open.');
+    }
+
+    const escrow = await this.system(this.prisma, AccountType.SYSTEM_ESCROW);
+    const house = await this.system(this.prisma, AccountType.SYSTEM_HOUSE);
+    const openBets = await this.prisma.bet.findMany({ where: { marketId, status: 'OPEN' } });
+
+    // Шаг 2: обрабатываем ставки батчами, а не одной большой транзакцией —
+    // так же, как gameStakeBatchWithin/gamePayoutBatchWithin избегают O(N)
+    // в одной транзакции. idempotencyKey на пост защищает от дублей, если
+    // придётся повторно докрутить недообработанный батч после сбоя.
+    const BATCH_SIZE = 200;
+    for (let i = 0; i < openBets.length; i += BATCH_SIZE) {
+      const chunk = openBets.slice(i, i + BATCH_SIZE);
+      await this.prisma.$transaction(async (tx) => {
+        for (const bet of chunk) {
+          const cash = await this.userCash(tx, bet.userId);
+
+          if (bet.outcomeId === winningOutcomeId) {
+            const profitFromHouse = bet.potentialPayout.sub(bet.stake);
+            await this.ledger.postWithin(tx, {
+              kind: 'BET_SETTLE_WIN',
+              reference: bet.id,
+              idempotencyKey: `settle:${bet.id}`,
+              createdById: actorId,
+              legs: [
+                { accountId: escrow.id, amount: bet.stake.negated() },
+                { accountId: house.id, amount: profitFromHouse.negated() },
+                { accountId: cash.id, amount: bet.potentialPayout },
+              ],
+            });
+            await tx.bet.update({
+              where: { id: bet.id },
+              data: { status: 'WON', settledAt: new Date() },
+            });
+          } else {
+            await this.ledger.postWithin(tx, {
+              kind: 'BET_SETTLE_LOSS',
+              reference: bet.id,
+              idempotencyKey: `settle:${bet.id}`,
+              createdById: actorId,
+              legs: [
+                { accountId: escrow.id, amount: bet.stake.negated() },
+                { accountId: house.id, amount: bet.stake },
+              ],
+            });
+            await tx.bet.update({
+              where: { id: bet.id },
+              data: { status: 'LOST', settledAt: new Date() },
+            });
+          }
+        }
+      });
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'MARKET_RESOLVED',
+        targetType: 'Market',
+        targetId: marketId,
+        metadata: { winningOutcomeId, settled: openBets.length },
+      },
+    });
+
+    return { resolved: openBets.length };
   }
 
   async sellBet(userId: string, betId: string): Promise<{ refund: string }> {
-    const bet = await this.prisma.bet.findUnique({ where: { id: betId } });
-    if (!bet) throw new NotFoundException('Bet not found.');
-    if (bet.userId !== userId) throw new ForbiddenException('Not your bet.');
-    if (bet.status !== BetStatus.OPEN) throw new BadRequestException('Only open bets can be sold.');
+    // предварительная проверка вне транзакции — только для быстрого 404/403,
+    // финальное решение принимается атомарно внутри транзакции ниже
+    const existing = await this.prisma.bet.findUnique({ where: { id: betId } });
+    if (!existing) throw new NotFoundException('Bet not found.');
+    if (existing.userId !== userId) throw new ForbiddenException('Not your bet.');
 
-    const refund = bet.stake.mul(0.5); // Decimal, без потери точности
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.bet.update({
-        where: { id: betId },
+    return this.prisma.$transaction(async (tx) => {
+      // атомарный compare-and-swap: только один параллельный запрос получит count === 1
+      const { count } = await tx.bet.updateMany({
+        where: { id: betId, userId, status: BetStatus.OPEN },
         data: { status: BetStatus.SOLD, settledAt: new Date() },
       });
+      if (count === 0) {
+        throw new BadRequestException('Only open bets can be sold.');
+      }
+
+      const bet = await tx.bet.findUniqueOrThrow({ where: { id: betId } });
+      const refund = bet.stake.mul(0.5); // Decimal, без потери точности
 
       const escrow = await this.system(tx, AccountType.SYSTEM_ESCROW);
       const cash = await this.userCash(tx, userId);
@@ -514,8 +531,8 @@ export class WalletService {
           { accountId: house.id, amount: bet.stake.sub(refund) },
         ],
       });
-    });
 
-    return { refund: refund.toFixed(2) };
+      return { refund: refund.toFixed(2) };
+    });
   }
 }

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import { WalletService } from './wallet.service';
-import { AmountDto } from './dto';
+import { WithdrawDto } from './dto';
 
 @Controller('wallet')
 export class WalletController {
@@ -16,19 +16,12 @@ export class WalletController {
     return this.wallet.stats(req.user.id);
   }
 
-  @Post('deposit')
-  deposit(@Req() req: any, @Body() dto: AmountDto) {
-    return this.wallet.deposit(req.user.id, dto.amount, {
-      actorId: req.user.id,
-      reference: 'cashier',
-    });
-  }
-
   @Post('withdraw')
-  withdraw(@Req() req: any, @Body() dto: AmountDto) {
+  withdraw(@Req() req: any, @Body() dto: WithdrawDto) {
     return this.wallet.withdraw(req.user.id, dto.amount, {
       actorId: req.user.id,
       reference: 'cashier',
+      idempotencyKey: `withdraw:${req.user.id}:${dto.requestId}`,
     });
   }
 }

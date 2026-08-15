@@ -144,12 +144,13 @@ const data: any = await res.json().catch(() => ({}));
    * Нужно свериться с разделом "Master Merchant Program → Payouts and
    * Reporting" в документации, прежде чем полагаться на этот метод в проде.
    */
-  async createPayout(
+ async createPayout(
     userId: string,
     amountUsd: number,
     toAddress: string,
     currency = 'USDT',
     network = 'TRX-TRC20',
+    idempotencyKey?: string,
   ) {
     throw new BadRequestException(
       'Rampex payouts are not yet confirmed against the API docs — see Master Merchant Program → Payouts and Reporting.',

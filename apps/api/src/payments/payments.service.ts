@@ -118,10 +118,10 @@ export class PaymentsService {
       .update(base64)
       .digest('hex');
 
-    const sigValid = timingSafeEqual(
-      Buffer.from(calculated),
-      Buffer.from(receivedSign || ''),
-    );
+    const calculatedBuf = Buffer.from(calculated, 'utf8');
+    const receivedBuf = Buffer.from(receivedSign || '', 'utf8');
+    const sigValid =
+      calculatedBuf.length === receivedBuf.length && timingSafeEqual(calculatedBuf, receivedBuf);
     if (!sigValid) {
       this.logger.warn('2328 webhook signature mismatch');
       return { ok: false };
@@ -183,6 +183,7 @@ export class PaymentsService {
     toAddress: string,
     currency = 'USDT',
     network = 'TRX-TRC20',
+    idempotencyKey?: string,
   ) {
     if (!this.configured) throw new BadRequestException('Payment gateway not configured.');
 
@@ -193,13 +194,16 @@ export class PaymentsService {
       throw new BadRequestException('Invalid destination address.');
     }
 
+    const key = idempotencyKey ?? `2328-payout:${userId}:${Date.now()}`;
+
     // 1) Списываем с баланса пользователя ПЕРЕД обращением к гейту.
     const debitTxn = await this.wallet.withdraw(userId, amountUsd, {
       actorId: userId,
-      reference: `2328-payout:${userId}:${Date.now()}`,
+      reference: key,
+      idempotencyKey: key,
     });
 
-    const orderId = `fortx-payout-${userId}-${Date.now()}`;
+    const orderId = `fortx-payout-${key}`;
     const payload = {
       currency,
       network,
