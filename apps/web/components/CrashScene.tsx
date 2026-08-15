@@ -21,10 +21,10 @@ type Particle = {
 
 // Safe flight zone in percent — the rocket NEVER goes outside this box,
 // so it can't fly off the visible frame regardless of container size.
-const X_MIN = 10;
-const X_MAX = 82;
-const Y_MIN = 14;
-const Y_MAX = 84;
+const X_MIN = 12;
+const X_MAX = 78;
+const Y_MIN = 16;
+const Y_MAX = 82;
 
 function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
@@ -49,6 +49,9 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
   const progress = progressFromMultiplier(multiplier);
   const { x, y } = pointForProgress(progress);
 
+  // Angle of ascent relative to "pointing right" (0deg). The rocket artwork's
+  // nose points straight UP in the source image, so we add a +90deg offset
+  // when applying the rotation to the <img> below.
   const behind = pointForProgress(Math.max(0, progress - 0.03));
   const angleRad = Math.atan2(behind.y - y, x - behind.x);
   const angleDeg = (angleRad * 180) / Math.PI;
@@ -72,7 +75,7 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
   const prevCashed = useRef(false);
   const emberTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Continuous ember trail while flying — a subtle premium touch.
+  // Continuous ember trail while flying, emitted from behind the rocket.
   useEffect(() => {
     if (!active) {
       if (emberTimer.current) clearInterval(emberTimer.current);
@@ -80,20 +83,21 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
       return;
     }
     emberTimer.current = setInterval(() => {
+      const backRad = angleRad + Math.PI;
       setEmbers((prev) => {
         const next = prev
           .map((p) => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, size: p.size * 0.9 }))
           .filter((p) => p.size > 0.15);
         next.push({
           id: particleId++,
-          x,
-          y,
-          vx: (Math.random() - 0.5) * 0.3,
-          vy: 0.15 + Math.random() * 0.2,
-          color: Math.random() > 0.5 ? '#ffb84d' : '#ffe08a',
-          size: 0.9 + Math.random() * 0.6,
+          x: x + Math.cos(backRad) * 2.2,
+          y: y + Math.sin(backRad) * 2.2,
+          vx: Math.cos(backRad) * 0.35 + (Math.random() - 0.5) * 0.2,
+          vy: Math.sin(backRad) * 0.35 + (Math.random() - 0.5) * 0.2,
+          color: Math.random() > 0.5 ? '#c96bff' : '#ff8ee6',
+          size: 0.9 + Math.random() * 0.7,
         });
-        return next.slice(-24);
+        return next.slice(-26);
       });
     }, 55);
     return () => {
@@ -105,7 +109,7 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
   useEffect(() => {
     if (crashed && !prevCrashed.current) {
       prevCrashed.current = true;
-      const burst: Particle[] = Array.from({ length: 20 }).map(() => {
+      const burst: Particle[] = Array.from({ length: 22 }).map(() => {
         const a = Math.random() * Math.PI * 2;
         const speed = 0.5 + Math.random() * 1.1;
         return {
@@ -181,7 +185,8 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
     [],
   );
 
-  const trailColor = crashed ? '#ff5d5d' : cashedOut ? '#5eeaa0' : '#ffcf6b';
+  const glowColor = crashed ? '#ff5d5d' : cashedOut ? '#5eeaa0' : '#b866ff';
+  const trailColor = crashed ? '#ff5d5d' : cashedOut ? '#5eeaa0' : '#c96bff';
   const showRocket = active || crashed || cashedOut;
   const trail = trailRef.current;
 
@@ -210,7 +215,7 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
             <stop offset="100%" stopColor={trailColor} stopOpacity="0.95" />
           </linearGradient>
           <radialGradient id="nebula" cx="24%" cy="94%" r="80%">
-            <stop offset="0%" stopColor="#3a2a6a" stopOpacity="0.35" />
+            <stop offset="0%" stopColor="#3a2a6a" stopOpacity="0.4" />
             <stop offset="100%" stopColor="#000000" stopOpacity="0" />
           </radialGradient>
         </defs>
@@ -229,7 +234,7 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
           />
         ))}
 
-        <line x1="0" y1={Y_MAX + 4} x2="100" y2={Y_MAX + 4} stroke="#ffffff" strokeOpacity="0.06" strokeWidth="0.3" />
+        <line x1="0" y1={Y_MAX + 6} x2="100" y2={Y_MAX + 6} stroke="#ffffff" strokeOpacity="0.06" strokeWidth="0.3" />
 
         {trailPath && (
           <path
@@ -244,7 +249,7 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
         )}
 
         {embers.map((p) => (
-          <circle key={p.id} cx={p.x} cy={p.y} r={p.size * 0.4} fill={p.color} opacity={0.75} />
+          <circle key={p.id} cx={p.x} cy={p.y} r={p.size * 0.4} fill={p.color} opacity={0.8} />
         ))}
 
         {debris.map((p) => (
@@ -276,51 +281,65 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
         )}
       </svg>
 
-      {/* rocket — absolutely positioned HTML overlay, so it never stretches/warps
-          and always stays inside the padded flight box (never flies off-frame) */}
+      {/* rocket — real brand artwork, absolutely positioned by percent so it
+          can never fly outside the padded flight box */}
       {showRocket && !crashed && (
         <div
           className="absolute"
           style={{
             left: `${x}%`,
             top: `${y}%`,
-            transform: `translate(-50%, -50%) rotate(${-angleDeg}deg)`,
+            transform: `translate(-50%, -50%) rotate(${90 - angleDeg}deg)`,
             transition: active ? 'none' : 'left 0.25s ease, top 0.25s ease',
           }}
         >
-          {/* halo */}
+          {/* neon halo behind the rocket */}
           <div
-            className="absolute rounded-full blur-md"
+            className="absolute rounded-full blur-xl"
             style={{
               left: '50%',
-              top: '50%',
-              width: 46,
-              height: 46,
+              top: '58%',
+              width: 70,
+              height: 70,
               transform: 'translate(-50%, -50%)',
-              background: `radial-gradient(circle, ${trailColor}66 0%, transparent 70%)`,
+              background: `radial-gradient(circle, ${glowColor}55 0%, transparent 70%)`,
             }}
           />
-          <svg width="46" height="24" viewBox="0 0 46 24" className="relative drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]">
-            <defs>
-              <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#fdfefe" />
-                <stop offset="100%" stopColor="#c7cede" />
-              </linearGradient>
-            </defs>
-            {active && (
-              <g className="animate-crashScene-flame" style={{ transformOrigin: '13px 12px' }}>
-                <path d="M 13 12 L 0 8 L -6 12 L 0 16 Z" fill="#ffb84d" opacity="0.95" />
-                <path d="M 13 12 L 4 9.4 L 1 12 L 4 14.6 Z" fill="#fff3c4" />
-              </g>
-            )}
-            <path d="M 38 12 L 27 5 L 27 19 Z" fill="url(#bodyGrad)" />
-            <ellipse cx="20" cy="12" rx="16" ry="6.5" fill="url(#bodyGrad)" />
-            <path d="M 21 5.5 L 10 1.5 L 16 8 Z" fill={trailColor} />
-            <path d="M 21 18.5 L 10 22.5 L 16 16 Z" fill={trailColor} />
-            <circle cx="24" cy="12" r="3.4" fill="#0d1220" />
-            <circle cx="24" cy="12" r="2" fill="#8fdcff" />
-            <circle cx="23.2" cy="11.2" r="0.7" fill="#ffffff" opacity="0.9" />
-          </svg>
+
+          {/* engine flame, anchored to the tail (bottom of the artwork) */}
+          {active && (
+            <div
+              className="absolute animate-crashScene-flame"
+              style={{
+                left: '50%',
+                bottom: '-2px',
+                transformOrigin: 'top center',
+              }}
+            >
+              <svg width="26" height="34" viewBox="0 0 26 34" style={{ transform: 'translateX(-50%)' }}>
+                <defs>
+                  <linearGradient id="flameGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#fff3c4" />
+                    <stop offset="45%" stopColor="#ffb84d" />
+                    <stop offset="100%" stopColor="#c96bff" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path d="M 13 0 C 18 8 24 14 13 34 C 2 14 8 8 13 0 Z" fill="url(#flameGrad)" />
+              </svg>
+            </div>
+          )}
+
+          <img
+            src="/rocket-fortx.png"
+            alt=""
+            width={54}
+            height={124}
+            className="relative select-none"
+            style={{
+              filter: `drop-shadow(0 0 10px ${glowColor}aa) drop-shadow(0 2px 6px rgba(0,0,0,0.5))`,
+            }}
+            draggable={false}
+          />
         </div>
       )}
 
@@ -336,11 +355,11 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
         }
 
         @keyframes crashScene-flame {
-          0%, 100% { transform: scaleX(1) scaleY(1); }
-          50% { transform: scaleX(1.3) scaleY(0.8); }
+          0%, 100% { transform: scaleY(1) scaleX(1); opacity: 0.95; }
+          50% { transform: scaleY(1.18) scaleX(0.88); opacity: 1; }
         }
         .animate-crashScene-flame {
-          animation: crashScene-flame 0.12s ease-in-out infinite;
+          animation: crashScene-flame 0.14s ease-in-out infinite;
         }
 
         @keyframes crashScene-debris {
