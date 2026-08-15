@@ -182,8 +182,8 @@ export default function CrashPage() {
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
-          {/* graph */}
-          <div className="relative flex h-72 items-end justify-center overflow-hidden rounded-2xl border hairline bg-panel2">
+  {/* graph */}
+  <div className="relative order-2 flex h-72 items-end justify-center overflow-hidden rounded-2xl border hairline bg-panel2 lg:order-1">
             <CrashScene
               active={active}
               crashed={!!result && !result.won}
@@ -206,7 +206,7 @@ export default function CrashPage() {
           </div>
 
           {/* bet panel */}
-          <div className="flex flex-col rounded-2xl border hairline bg-fg/[0.02] p-4">
+          <div className="order-1 flex min-h-[280px] flex-col rounded-2xl border hairline bg-fg/[0.02] p-4 lg:order-2">
             {!email ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
                 <p className="text-sm text-fg/50">Sign in to play and claim $5 free.</p>
