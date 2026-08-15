@@ -87,7 +87,7 @@ export default function CrashScene({ active, crashed, cashedOut, multiplier }: P
 
   // Rocket height is a healthy chunk of the smaller box dimension, clamped
   // to sane min/max so it looks right on a tiny phone or a wide desktop card.
-  const rocketH = Math.min(Math.max(Math.min(box.w, box.h) * 0.62, 64), 230);
+  const rocketH = Math.min(Math.max(Math.min(box.w, box.h) * 0.24, 30), 92);
   const rocketW = rocketH * ROCKET_ASPECT;
   const scale = rocketH / 150; // baseline scale factor for glow/flame
 
