@@ -72,11 +72,18 @@ export default function CrashPage() {
 
   const doCashout = useCallback(async () => {
     if (endedRef.current || !roundRef.current) return;
+    // Snapshot which round this call belongs to. If the player hits "Play
+    // again" (or starts a fresh round) while this request is still in
+    // flight, roundRef.current will have moved on by the time we get a
+    // response — in that case the response is stale and must never touch
+    // state again, or it re-opens a screen the player already dismissed.
+    const requestRoundId = roundRef.current;
     endedRef.current = true;
     clearTimers();
     const m = curve((Date.now() - startRef.current) / 1000);
     try {
-      const r = await api.games.crashCashout(roundRef.current, +m.toFixed(4));
+      const r = await api.games.crashCashout(requestRoundId, +m.toFixed(4));
+      if (roundRef.current !== requestRoundId) return; // stale — round moved on
       if (r.bust) {
         setLiveMult(r.crashPoint);
         setResult({ won: false, crashPoint: r.crashPoint });
@@ -92,6 +99,7 @@ export default function CrashPage() {
       await refreshBalance();
       loadRecent();
     } catch (e: any) {
+      if (roundRef.current !== requestRoundId) return; // stale — don't surface a stray error
       setError(e?.message || 'Cash out failed');
     }
   }, [loadRecent, refreshBalance]);
@@ -110,8 +118,13 @@ export default function CrashPage() {
   function startPoll() {
     pollRef.current = setInterval(async () => {
       if (endedRef.current || !roundRef.current) return;
+      const requestRoundId = roundRef.current;
       try {
-        const s = await api.games.crashState(roundRef.current);
+        const s = await api.games.crashState(requestRoundId);
+        // The round may have been reset (or a new one started) while this
+        // request was in flight — a late reply for an old round must never
+        // be allowed to resurrect its result screen over the new state.
+        if (roundRef.current !== requestRoundId) return;
         if (s.status === 'crashed') {
           finishCrash(s.crashPoint);
         } else if (s.status === 'flying') {

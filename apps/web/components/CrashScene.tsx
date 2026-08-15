@@ -24,7 +24,9 @@ const ROCKET_ASPECT = 828 / 1900;
 
 // The rocket flies straight up a fixed vertical lane — no diagonal drift,
 // no body tilt. This matches the classic "RocketX"-style crash visual.
-const X_CENTER = 50;
+// It's offset to the left (not dead-center) so the big multiplier number,
+// which sits centered in the box, never overlaps the rocket or its flame.
+const X_CENTER = 30;
 const Y_MIN = 14;
 const Y_MAX = 82;
 
