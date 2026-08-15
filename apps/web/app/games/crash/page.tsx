@@ -206,7 +206,7 @@ export default function CrashPage() {
               cashedOut={!!result && result.won}
               multiplier={display}
             />
-            <div className="relative z-10 mb-8 text-center sm:mb-10">
+            <div className="crash-hud pointer-events-none absolute inset-x-0 top-4 z-10 text-center sm:top-6">
               <p
                 className={`crash-mult font-display text-5xl font-bold tabular-nums drop-shadow-[0_0_20px_rgba(0,0,0,0.6)] sm:text-6xl lg:text-7xl ${color} ${
                   active ? 'crash-mult--live' : ''
@@ -225,6 +225,10 @@ export default function CrashPage() {
             </div>
 
             <style jsx>{`
+              .crash-hud {
+                background: linear-gradient(180deg, rgba(0, 0, 0, 0.28) 0%, transparent 100%);
+                padding-bottom: 1.5rem;
+              }
               .crash-mult-x {
                 background: linear-gradient(180deg, currentColor 0%, currentColor 60%, transparent 140%);
                 -webkit-background-clip: text;
