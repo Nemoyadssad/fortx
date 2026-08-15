@@ -160,15 +160,6 @@ function GiftArt() {
   );
 }
 
-/** Mini chart skeleton while loading */
-function ChartSkeleton() {
-  return (
-    <div className="flex h-[110px] items-center justify-center">
-      <div className="h-[2px] w-3/4 animate-pulse rounded-full bg-fg/[0.06]" />
-    </div>
-  );
-}
-
 /** The hero card inner content — extracted so we can key it for smooth transitions */
 function HeroCard({
   ev,
@@ -212,23 +203,39 @@ function HeroCard({
         {market.outcomes.length} outcomes · live odds &amp; predictions
       </p>
 
-      {/* ── MINI CHART ── */}
-      <div className="relative mt-3 min-w-0 overflow-hidden rounded-xl border border-fg/[0.06] bg-fg/[0.02]">
-        {series === null ? (
-          <ChartSkeleton />
-        ) : hasChart ? (
-          <div className="px-1 pt-1 pb-0">
+      {/* ── MINI CHART — no border, fades into card ── */}
+      {(series === null || hasChart) && (
+        <div className="relative -mx-6 mt-3 overflow-hidden">
+          {series === null ? (
+            /* skeleton pulse lines */
+            <div className="flex h-[100px] flex-col justify-center gap-2 px-6 opacity-30">
+              <div className="h-px w-full animate-pulse rounded-full bg-gold" />
+              <div className="h-px w-full animate-pulse rounded-full bg-[#3aa3ff]" style={{ animationDelay: '0.3s' }} />
+            </div>
+          ) : (
             <PriceChart series={series} compact />
-          </div>
-        ) : (
-          /* no history — show a flat placeholder line */
-          <div className="flex h-[80px] items-center justify-center gap-2 text-[11px] text-fg/25">
-            <span className="h-px w-12 bg-fg/10 rounded-full" />
-            No price history yet
-            <span className="h-px w-12 bg-fg/10 rounded-full" />
-          </div>
-        )}
-      </div>
+          )}
+          {/* top fade */}
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-6"
+            style={{ background: 'linear-gradient(to bottom, var(--color-panel, rgba(20,18,34,1)), transparent)' }}
+          />
+          {/* bottom fade — blends into card */}
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-12"
+            style={{ background: 'linear-gradient(to top, var(--color-panel, rgba(20,18,34,1)), transparent)' }}
+          />
+          {/* left + right fades */}
+          <div
+            className="pointer-events-none absolute inset-y-0 left-0 w-8"
+            style={{ background: 'linear-gradient(to right, var(--color-panel, rgba(20,18,34,1)), transparent)' }}
+          />
+          <div
+            className="pointer-events-none absolute inset-y-0 right-0 w-8"
+            style={{ background: 'linear-gradient(to left, var(--color-panel, rgba(20,18,34,1)), transparent)' }}
+          />
+        </div>
+      )}
 
       {/* quick picks */}
       <div className="relative mt-auto flex min-w-0 flex-wrap items-center justify-center gap-2 pt-4">
