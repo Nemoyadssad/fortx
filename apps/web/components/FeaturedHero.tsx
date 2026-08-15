@@ -140,11 +140,10 @@ function RocketArt() {
       src={rocketUrl}
       alt=""
       aria-hidden="true"
-      className="pointer-events-none absolute right-0 -top-4 z-0 h-[270px] w-[290px] object-cover object-center opacity-90 mix-blend-lighten"
+      className="pointer-events-none absolute -right-6 -top-6 z-0 h-[210px] w-[240px] object-cover object-right-top opacity-95 mix-blend-lighten sm:h-[240px] sm:w-[270px]"
       style={{
-        WebkitMaskImage: 'linear-gradient(210deg, black 40%, transparent 85%)',
-        maskImage: 'linear-gradient(210deg, black 40%, transparent 85%)',
-        transform: 'translateX(20%)',
+        WebkitMaskImage: 'linear-gradient(205deg, black 55%, transparent 92%)',
+        maskImage: 'linear-gradient(205deg, black 55%, transparent 92%)',
       }}
     />
   );
@@ -156,9 +155,17 @@ function GiftArt() {
       src={giftBoxUrl}
       alt=""
       aria-hidden="true"
-      className="pointer-events-none absolute -bottom-6 right-0 h-[200px] w-[220px] object-contain object-bottom mix-blend-lighten opacity-90"
-      style={{ transform: 'translateX(15%)' }}
+      className="pointer-events-none absolute -bottom-8 -right-10 h-[230px] w-[260px] object-contain object-bottom mix-blend-lighten opacity-95 sm:h-[260px] sm:w-[290px]"
     />
+  );
+}
+
+/** Mini chart skeleton while loading */
+function ChartSkeleton() {
+  return (
+    <div className="flex h-[110px] items-center justify-center">
+      <div className="h-[2px] w-3/4 animate-pulse rounded-full bg-fg/[0.06]" />
+    </div>
   );
 }
 
@@ -188,15 +195,15 @@ function HeroCard({
         </span>
       </div>
 
-      {/* floating flags — only when no chart */}
-      {!hasChart && series !== null && (
-        <div className="relative mt-4 mb-2">
+      {/* floating flags — only show when no chart, to save vertical space */}
+      {!hasChart && (
+        <div className="relative mt-4 mb-3">
           <FloatChips outcomes={market.outcomes} />
         </div>
       )}
 
       {/* title */}
-      <a href={`/event/${ev.id}`} className="group/h relative mt-4 block min-w-0">
+      <a href={`/event/${ev.id}`} className="group/h relative mt-3 block min-w-0">
         <h2 className="line-clamp-2 min-w-0 text-center font-display text-xl font-bold leading-tight transition group-hover/h:text-gold-deep sm:text-2xl">
           {market.question || ev.title}
         </h2>
@@ -205,20 +212,23 @@ function HeroCard({
         {market.outcomes.length} outcomes · live odds &amp; predictions
       </p>
 
-      {/* ── MINI CHART — fixed 90px tall strip ── */}
-      {hasChart && (
-        <div className="relative -mx-6 mt-3 overflow-hidden" style={{ height: 90 }}>
-          {/* SVG is ~170px tall in compact mode; we shift it up to show the interesting middle part */}
-          <div className="pointer-events-none" style={{ marginTop: -40 }}>
-            <PriceChart series={series!} compact />
+      {/* ── MINI CHART ── */}
+      <div className="relative mt-3 min-w-0 overflow-hidden rounded-xl border border-fg/[0.06] bg-fg/[0.02]">
+        {series === null ? (
+          <ChartSkeleton />
+        ) : hasChart ? (
+          <div className="px-1 pt-1 pb-0">
+            <PriceChart series={series} compact />
           </div>
-          {/* fade all edges so it dissolves into the card */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-10" style={{ background: 'linear-gradient(to bottom, var(--color-panel,#13111e), transparent)' }} />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10" style={{ background: 'linear-gradient(to top, var(--color-panel,#13111e), transparent)' }} />
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-8" style={{ background: 'linear-gradient(to right, var(--color-panel,#13111e), transparent)' }} />
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-8" style={{ background: 'linear-gradient(to left, var(--color-panel,#13111e), transparent)' }} />
-        </div>
-      )}
+        ) : (
+          /* no history — show a flat placeholder line */
+          <div className="flex h-[80px] items-center justify-center gap-2 text-[11px] text-fg/25">
+            <span className="h-px w-12 bg-fg/10 rounded-full" />
+            No price history yet
+            <span className="h-px w-12 bg-fg/10 rounded-full" />
+          </div>
+        )}
+      </div>
 
       {/* quick picks */}
       <div className="relative mt-auto flex min-w-0 flex-wrap items-center justify-center gap-2 pt-4">
@@ -226,10 +236,10 @@ function HeroCard({
           <button
             key={o.id}
             onClick={() => onPick(ev, market, o)}
-            className="group/b flex min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-3 py-2 transition hover:border-gold/40 hover:bg-fg/[0.05] active:scale-95"
+            className="group/b flex min-w-0 max-w-full items-center gap-2 rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-4 py-2.5 transition hover:border-gold/40 hover:bg-fg/[0.05] active:scale-95"
           >
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-            <span className="min-w-0 max-w-[120px] truncate text-sm text-fg/85">{o.label}</span>
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+            <span className="min-w-0 max-w-[140px] truncate text-sm text-fg/85">{o.label}</span>
             <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-gold-deep">{pct(o.price)}%</span>
           </button>
         ))}
