@@ -140,10 +140,11 @@ function RocketArt() {
       src={rocketUrl}
       alt=""
       aria-hidden="true"
-      className="pointer-events-none absolute -right-6 -top-6 z-0 h-[210px] w-[240px] object-cover object-right-top opacity-95 mix-blend-lighten sm:h-[240px] sm:w-[270px]"
+      className="pointer-events-none absolute right-0 -top-4 z-0 h-[270px] w-[290px] object-cover object-center opacity-90 mix-blend-lighten"
       style={{
-        WebkitMaskImage: 'linear-gradient(205deg, black 55%, transparent 92%)',
-        maskImage: 'linear-gradient(205deg, black 55%, transparent 92%)',
+        WebkitMaskImage: 'linear-gradient(210deg, black 40%, transparent 85%)',
+        maskImage: 'linear-gradient(210deg, black 40%, transparent 85%)',
+        transform: 'translateX(20%)',
       }}
     />
   );
@@ -155,7 +156,8 @@ function GiftArt() {
       src={giftBoxUrl}
       alt=""
       aria-hidden="true"
-      className="pointer-events-none absolute -bottom-8 -right-10 h-[230px] w-[260px] object-contain object-bottom mix-blend-lighten opacity-95 sm:h-[260px] sm:w-[290px]"
+      className="pointer-events-none absolute -bottom-6 right-0 h-[200px] w-[220px] object-contain object-bottom mix-blend-lighten opacity-90"
+      style={{ transform: 'translateX(15%)' }}
     />
   );
 }
@@ -203,37 +205,24 @@ function HeroCard({
         {market.outcomes.length} outcomes · live odds &amp; predictions
       </p>
 
-      {/* ── MINI CHART — no border, fades into card ── */}
+      {/* ── MINI CHART — slim, fades into card ── */}
       {(series === null || hasChart) && (
-        <div className="relative -mx-6 mt-3 overflow-hidden">
+        <div className="relative -mx-6 mt-2 overflow-hidden opacity-70" style={{ maxHeight: 110 }}>
           {series === null ? (
-            /* skeleton pulse lines */
-            <div className="flex h-[100px] flex-col justify-center gap-2 px-6 opacity-30">
-              <div className="h-px w-full animate-pulse rounded-full bg-gold" />
-              <div className="h-px w-full animate-pulse rounded-full bg-[#3aa3ff]" style={{ animationDelay: '0.3s' }} />
+            <div className="flex h-[80px] flex-col justify-center gap-3 px-6 opacity-40">
+              <div className="h-px w-full animate-pulse rounded-full bg-gold/60" />
+              <div className="h-px w-full animate-pulse rounded-full bg-[#3aa3ff]/60" style={{ animationDelay: '0.4s' }} />
             </div>
           ) : (
-            <PriceChart series={series} compact />
+            <div style={{ marginTop: -10, marginBottom: -20 }}>
+              <PriceChart series={series} compact />
+            </div>
           )}
-          {/* top fade */}
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 h-6"
-            style={{ background: 'linear-gradient(to bottom, var(--color-panel, rgba(20,18,34,1)), transparent)' }}
-          />
-          {/* bottom fade — blends into card */}
-          <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-12"
-            style={{ background: 'linear-gradient(to top, var(--color-panel, rgba(20,18,34,1)), transparent)' }}
-          />
-          {/* left + right fades */}
-          <div
-            className="pointer-events-none absolute inset-y-0 left-0 w-8"
-            style={{ background: 'linear-gradient(to right, var(--color-panel, rgba(20,18,34,1)), transparent)' }}
-          />
-          <div
-            className="pointer-events-none absolute inset-y-0 right-0 w-8"
-            style={{ background: 'linear-gradient(to left, var(--color-panel, rgba(20,18,34,1)), transparent)' }}
-          />
+          {/* all-edge fades */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-8" style={{ background: 'linear-gradient(to bottom, var(--color-panel, rgba(18,16,30,1)), transparent)' }} />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14" style={{ background: 'linear-gradient(to top, var(--color-panel, rgba(18,16,30,1)), transparent)' }} />
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-10" style={{ background: 'linear-gradient(to right, var(--color-panel, rgba(18,16,30,1)), transparent)' }} />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-10" style={{ background: 'linear-gradient(to left, var(--color-panel, rgba(18,16,30,1)), transparent)' }} />
         </div>
       )}
 
