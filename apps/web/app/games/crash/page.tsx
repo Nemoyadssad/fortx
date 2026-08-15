@@ -161,6 +161,10 @@ export default function CrashPage() {
 
   const display = result ? (result.won ? result.multiplier ?? liveMult : result.crashPoint) : liveMult;
   const color = result ? (result.won ? 'text-win' : 'text-lose') : 'text-fg';
+  const potentialPayout = stake * liveMult;
+  const autoNum = autoTarget ? Math.max(1.01, Number(autoTarget)) : null;
+  const autoProgress =
+    autoNum && active ? Math.min(1, Math.log(liveMult) / Math.log(autoNum)) : 0;
 
   function chipColor(cp: number) {
     if (cp < 1.3) return 'text-lose';
@@ -169,9 +173,9 @@ export default function CrashPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-5 py-8">
-      <div className="rounded-3xl panel p-5 sm:p-6">
-        <div className="mb-5 flex items-center justify-between">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-5 sm:py-8">
+      <div className="rounded-3xl panel p-4 sm:p-6">
+        <div className="mb-4 flex items-center justify-between sm:mb-5">
           <div>
             <h1 className="font-display text-lg font-bold">Crash</h1>
             <p className="text-xs text-fg/45">Cash out before the rocket explodes.</p>
@@ -181,19 +185,21 @@ export default function CrashPage() {
           </a>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
-  {/* graph */}
-  <div className="relative order-2 flex h-72 items-end justify-center overflow-hidden rounded-2xl border hairline bg-panel2 lg:order-1">
+        <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1fr_300px]">
+          {/* graph */}
+          <div className="relative order-2 flex h-64 items-end justify-center overflow-hidden rounded-2xl border hairline bg-panel2 sm:h-80 lg:order-1 lg:h-[26rem]">
             <CrashScene
               active={active}
               crashed={!!result && !result.won}
               cashedOut={!!result && result.won}
               multiplier={display}
             />
-            <div className="relative z-10 mb-10 text-center">
-              <p className={`font-display text-6xl font-bold tabular-nums drop-shadow-[0_0_20px_rgba(0,0,0,0.6)] ${color}`}>
+            <div className="relative z-10 mb-8 text-center sm:mb-10">
+              <p
+                className={`font-display text-5xl font-bold tabular-nums drop-shadow-[0_0_20px_rgba(0,0,0,0.6)] sm:text-6xl lg:text-7xl ${color}`}
+              >
                 {display.toFixed(2)}
-                <span className="text-3xl">x</span>
+                <span className="text-2xl sm:text-3xl lg:text-4xl">x</span>
               </p>
               {result && (
                 <p className="mt-2 text-sm font-semibold text-fg/60 drop-shadow-[0_0_10px_rgba(0,0,0,0.8)]">
@@ -206,7 +212,7 @@ export default function CrashPage() {
           </div>
 
           {/* bet panel */}
-          <div className="order-1 flex min-h-[280px] flex-col rounded-2xl border hairline bg-fg/[0.02] p-4 lg:order-2">
+          <div className="order-1 flex min-h-[280px] flex-col rounded-2xl border hairline bg-fg/[0.02] p-4 lg:order-2 lg:min-h-[26rem]">
             {!email ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
                 <p className="text-sm text-fg/50">Sign in to play and claim $5 free.</p>
@@ -219,12 +225,48 @@ export default function CrashPage() {
               </div>
             ) : active ? (
               <div className="flex flex-1 flex-col">
-                <p className="text-center text-xs text-fg/40">In flight…</p>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-fg/40">
+                    In flight
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[11px] font-semibold text-win">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-win" />
+                    live
+                  </span>
+                </div>
+
+                <div className="mt-4 rounded-xl border hairline bg-fg/[0.03] p-4">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-fg/40">
+                    Potential payout
+                  </p>
+                  <p className="mt-1 font-display text-3xl font-bold tabular-nums text-gold-deep">
+                    {fmtMoney(potentialPayout)}
+                  </p>
+                  <p className="mt-1 text-xs text-fg/40">
+                    Stake {fmtMoney(stake)} · x{liveMult.toFixed(2)}
+                  </p>
+                </div>
+
+                {autoNum && (
+                  <div className="mt-3 rounded-xl border hairline bg-fg/[0.03] p-3.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-fg/45">Auto cash out</span>
+                      <span className="font-mono font-semibold text-fg/70">x{autoNum.toFixed(2)}</span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-fg/[0.06]">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-gold to-gold-soft transition-[width]"
+                        style={{ width: `${autoProgress * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <button
                   onClick={doCashout}
-                  className="mt-auto rounded-xl bg-gradient-to-b from-win to-[#1ea65a] py-4 font-bold text-black shadow-gold transition hover:brightness-105"
+                  className="mt-auto rounded-xl bg-gradient-to-b from-win to-[#1ea65a] py-4 font-bold text-black shadow-gold transition hover:brightness-105 active:scale-[0.99]"
                 >
-                  Cash out {fmtMoney(stake * liveMult)}
+                  Cash out {fmtMoney(potentialPayout)}
                 </button>
               </div>
             ) : result ? (
@@ -240,17 +282,21 @@ export default function CrashPage() {
                       <p className="mt-1 font-display text-2xl font-bold text-win">
                         {fmtMoney(result.payout ?? 0)}
                       </p>
+                      <p className="mt-1 text-xs text-fg/40">
+                        Cashed out at x{(result.multiplier ?? 0).toFixed(2)}
+                      </p>
                     </>
                   ) : (
                     <>
                       <p className="text-sm text-fg/60">Crashed at x{result.crashPoint.toFixed(2)}</p>
                       <p className="mt-1 font-display text-2xl font-bold text-lose">Busted</p>
+                      <p className="mt-1 text-xs text-fg/40">Stake {fmtMoney(stake)} lost</p>
                     </>
                   )}
                 </div>
                 <button
                   onClick={reset}
-                  className="mt-4 rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3 font-bold text-black shadow-gold transition hover:brightness-105"
+                  className="mt-4 rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3 font-bold text-black shadow-gold transition hover:brightness-105 active:scale-[0.99]"
                 >
                   Play again
                 </button>
@@ -295,7 +341,7 @@ export default function CrashPage() {
                 <button
                   onClick={start}
                   disabled={busy}
-                  className="mt-auto rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3.5 font-bold text-black shadow-gold transition hover:brightness-105 disabled:opacity-60"
+                  className="mt-auto rounded-xl bg-gradient-to-b from-gold to-gold-soft py-3.5 font-bold text-black shadow-gold transition hover:brightness-105 disabled:opacity-60 active:scale-[0.99]"
                 >
                   {busy ? 'Starting…' : `Bet ${fmtMoney(stake)}`}
                 </button>
