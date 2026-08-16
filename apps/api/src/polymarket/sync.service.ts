@@ -27,6 +27,25 @@ export class SyncService implements OnModuleInit {
     await this.runOnce();
   }
 
+  /** Отдельный крон только для резолюции — каждую минуту, независимо от importOpen. */
+  private resolving = false;
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async scheduledResolve() {
+    if (this.resolving) return;
+    this.resolving = true;
+    try {
+      const resolved = await this.resolveClosed();
+      if (resolved > 0) {
+        this.logger.log(`scheduledResolve: resolved ${resolved} markets.`);
+      }
+    } catch (e) {
+      this.logger.warn(`scheduledResolve failed: ${(e as Error).message}`);
+    } finally {
+      this.resolving = false;
+    }
+  }
+
   async runOnce() {
     if (this.running) {
       this.logger.warn('Sync already running — skipping this tick.');
@@ -35,10 +54,8 @@ export class SyncService implements OnModuleInit {
     this.running = true;
     try {
       const imported = await this.importOpen();
-      // ключевое: резолвим по СВОЕЙ БД, не по Polymarket
-      const resolved = await this.resolveClosed();
-      this.logger.log(`Sync done: ${imported} markets imported/updated, ${resolved} resolved.`);
-      return { imported, resolved };
+      this.logger.log(`Sync done: ${imported} markets imported/updated.`);
+      return { imported };
     } finally {
       this.running = false;
     }
