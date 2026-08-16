@@ -10,6 +10,8 @@ import { MyBets } from '@/components/MyBets';
 import { SupportWidget } from '@/components/SupportWidget';
 import { WinsTicker } from '@/components/WinsTicker';
 import { Footer } from '@/components/Footer';
+import { LanguageProvider } from '@/lib/i18n';
+import { HtmlLangSync } from '@/components/HtmlLangSync';
 
 const display = Space_Grotesk({
   subsets: ['latin'],
@@ -46,18 +48,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 />
       </head>
       <body>
-        <Providers>
-          <Background />
-          <Sidebar />
-          <div className="lg:pl-60">
-            <Nav />
-            <WinsTicker />
-            <main className="relative z-10">{children}</main>
-            <Footer />
-          </div>
-          <MyBets />
-          <SupportWidget />
-        </Providers>
+        <LanguageProvider>
+          <HtmlLangSync />
+          <Providers>
+            <Background />
+            <Sidebar />
+            <div className="lg:pl-60">
+              <Nav />
+              <WinsTicker />
+              <main className="relative z-10">{children}</main>
+              <Footer />
+            </div>
+            <MyBets />
+            <SupportWidget />
+          </Providers>
+        </LanguageProvider>
       </body>
     </html>
   );
