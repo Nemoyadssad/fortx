@@ -342,50 +342,40 @@ export class SyncService implements OnModuleInit {
       `resolveClosed: checking ${marketsWithOpenBets.length} markets with open bets...`,
     );
 
-    // Шаг 2: Группируем sourceId для пакетного запроса к Polymarket
-    // Polymarket Gamma API не даёт fetchById батчами, поэтому берём закрытые события
-    // и строим map: sourceId -> parsed prices
-    const sourceIds = new Set(marketsWithOpenBets.map((m) => m.sourceId!));
-
-    // Получаем закрытые события с Polymarket постранично (до 5000 маркетов)
+    // Шаг 2: Запрашиваем каждый маркет напрямую по sourceId через CLOB API.
+    // Gamma /events?closed=true возвращает 422 после ~2000 офсета — не используем пагинацию.
+    // Вместо этого: GET /markets?id=<sourceId> для каждого маркета отдельно.
     const polyPriceMap = new Map<string, { outcomesParsed: string[]; pricesParsed: string[] }>();
-    const pageSize = 100;
-    const maxPages = 50; // 5000 маркетов максимум
 
-    for (let page = 0; page < maxPages; page++) {
-      let events;
+    for (const market of marketsWithOpenBets) {
+      if (!market.sourceId) continue;
       try {
-        events = await this.polymarket.getEvents({
-          limit: pageSize,
-          offset: page * pageSize,
-          closed: true,
+        // Gamma API поддерживает фильтр по market id
+        const url = `https://gamma-api.polymarket.com/markets?id=${encodeURIComponent(market.sourceId)}`;
+        const res = await fetch(url, { headers: { accept: 'application/json' } });
+        if (!res.ok) {
+          this.logger.warn(`resolveClosed: fetch market ${market.sourceId} failed: ${res.status}`);
+          continue;
+        }
+        const data = await res.json();
+        const raw = Array.isArray(data) ? data[0] : data;
+        if (!raw) continue;
+
+        const m = this.polymarket.parseMarket(raw);
+        // Только закрытые маркеты резолвим — открытые пропускаем
+        if (!raw.closed) continue;
+
+        polyPriceMap.set(market.sourceId, {
+          outcomesParsed: m.outcomesParsed,
+          pricesParsed: m.pricesParsed,
         });
       } catch (e) {
-        this.logger.warn(`resolveClosed: getEvents page ${page} failed: ${(e as Error).message}`);
-        break;
+        this.logger.warn(`resolveClosed: error fetching market ${market.sourceId}: ${(e as Error).message}`);
       }
-
-      if (!events.length) break;
-
-      for (const ev of events) {
-        if (!ev.markets?.length) continue;
-        for (const raw of ev.markets) {
-          if (!sourceIds.has(raw.id)) continue; // нас интересует только этот маркет
-          const m = this.polymarket.parseMarket(raw);
-          polyPriceMap.set(raw.id, {
-            outcomesParsed: m.outcomesParsed,
-            pricesParsed: m.pricesParsed,
-          });
-        }
-      }
-
-      // Если нашли все нужные маркеты — не качаем больше страниц
-      if (polyPriceMap.size >= sourceIds.size) break;
-      if (events.length < pageSize) break;
     }
 
     this.logger.log(
-      `resolveClosed: found prices for ${polyPriceMap.size}/${sourceIds.size} markets on Polymarket`,
+      `resolveClosed: found prices for ${polyPriceMap.size}/${marketsWithOpenBets.length} markets on Polymarket`,
     );
 
     // Шаг 3: Резолвим каждый маркет
