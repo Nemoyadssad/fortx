@@ -108,10 +108,60 @@ const EXTRA: Record<string, Record<string, string>> = {
   'mines.errStart': { en: 'Could not start the game', es: 'No se pudo iniciar el juego', pt: 'Não foi possível iniciar o jogo', fr: 'Impossible de démarrer la partie', de: 'Spiel konnte nicht gestartet werden', it: 'Impossibile avviare la partita', ru: 'Не удалось начать игру', uk: 'Не вдалося почати гру', pl: 'Nie udało się rozpocząć gry', tr: 'Oyun başlatılamadı', vi: 'Không thể bắt đầu ván chơi', id: 'Gagal memulai permainan', zh: '无法开始游戏', ja: 'ゲームを開始できませんでした', ko: '게임을 시작할 수 없습니다' },
   'mines.errGeneric': { en: 'Something went wrong', es: 'Algo salió mal', pt: 'Algo deu errado', fr: 'Une erreur est survenue', de: 'Etwas ist schiefgelaufen', it: 'Qualcosa è andato storto', ru: 'Что-то пошло не так', uk: 'Щось пішло не так', pl: 'Coś poszło nie tak', tr: 'Bir şeyler yanlış gitti', vi: 'Đã có lỗi xảy ra', id: 'Terjadi kesalahan', zh: '出错了', ja: '問題が発生しました', ko: '문제가 발생했습니다' },
   'mines.errCashout': { en: 'Could not cash out', es: 'No se pudo retirar', pt: 'Não foi possível sacar', fr: "Impossible d'encaisser", de: 'Auszahlung fehlgeschlagen', it: 'Impossibile incassare', ru: 'Не удалось забрать выигрыш', uk: 'Не вдалося забрати виграш', pl: 'Nie udało się wypłacić', tr: 'Nakde çevrilemedi', vi: 'Không thể rút tiền', id: 'Gagal mencairkan', zh: '无法兑现', ja: 'キャッシュアウトできませんでした', ko: '캐시아웃할 수 없습니다' },
+
+  // --- Nav / Sidebar chrome (added: these keys were referenced by Nav.tsx / Sidebar.tsx but were missing) ---
+  'sidebar.jackpot': { en: 'Jackpot', es: 'Bote', pt: 'Jackpot', fr: 'Jackpot', de: 'Jackpot', it: 'Jackpot', ru: 'Джекпот', uk: 'Джекпот', pl: 'Jackpot', tr: 'Jackpot', vi: 'Jackpot', id: 'Jackpot', zh: '奖池', ja: 'ジャックポット', ko: '잭팟' },
+  'sidebar.slots': { en: 'Slots', es: 'Tragamonedas', pt: 'Caça-níqueis', fr: 'Machines à sous', de: 'Spielautomaten', it: 'Slot', ru: 'Слоты', uk: 'Слоти', pl: 'Automaty', tr: 'Slotlar', vi: 'Slots', id: 'Slot', zh: '老虎机', ja: 'スロット', ko: '슬롯' },
+  'sidebar.playMoneyDisclaimer': { en: 'Play money only · 18+', es: 'Solo dinero virtual · 18+', pt: 'Apenas dinheiro fictício · 18+', fr: 'Argent fictif uniquement · 18+', de: 'Nur Spielgeld · 18+', it: 'Solo denaro virtuale · 18+', ru: 'Только игровые деньги · 18+', uk: 'Лише ігрові гроші · 18+', pl: 'Tylko wirtualne pieniądze · 18+', tr: 'Sadece sanal para · 18+', vi: 'Chỉ tiền ảo · 18+', id: 'Hanya uang virtual · 18+', zh: '仅虚拟货币 · 18+', ja: '仮想通貨のみ・18歳以上', ko: '가상 머니 전용 · 18+' },
+  'common.theme': { en: 'Theme', es: 'Tema', pt: 'Tema', fr: 'Thème', de: 'Design', it: 'Tema', ru: 'Тема', uk: 'Тема', pl: 'Motyw', tr: 'Tema', vi: 'Chủ đề', id: 'Tema', zh: '主题', ja: 'テーマ', ko: '테마' },
+  'common.logout': { en: 'Log out', es: 'Cerrar sesión', pt: 'Sair', fr: 'Déconnexion', de: 'Abmelden', it: 'Esci', ru: 'Выйти', uk: 'Вийти', pl: 'Wyloguj się', tr: 'Çıkış yap', vi: 'Đăng xuất', id: 'Keluar', zh: '退出登录', ja: 'ログアウト', ko: '로그아웃' },
+  'common.menu': { en: 'Menu', es: 'Menú', pt: 'Menu', fr: 'Menu', de: 'Menü', it: 'Menu', ru: 'Меню', uk: 'Меню', pl: 'Menu', tr: 'Menü', vi: 'Menu', id: 'Menu', zh: '菜单', ja: 'メニュー', ko: '메뉴' },
+  'common.close': { en: 'Close', es: 'Cerrar', pt: 'Fechar', fr: 'Fermer', de: 'Schließen', it: 'Chiudi', ru: 'Закрыть', uk: 'Закрити', pl: 'Zamknij', tr: 'Kapat', vi: 'Đóng', id: 'Tutup', zh: '关闭', ja: '閉じる', ko: '닫기' },
+  'common.soon': { en: 'SOON', es: 'PRONTO', pt: 'EM BREVE', fr: 'BIENTÔT', de: 'BALD', it: 'PRESTO', ru: 'СКОРО', uk: 'СКОРО', pl: 'WKRÓTCE', tr: 'YAKINDA', vi: 'SẮP RA MẮT', id: 'SEGERA', zh: '即将推出', ja: '近日公開', ko: '출시 예정' },
+  'common.thisFeature': { en: 'This feature', es: 'Esta función', pt: 'Este recurso', fr: 'Cette fonctionnalité', de: 'Diese Funktion', it: 'Questa funzione', ru: 'Эта функция', uk: 'Ця функція', pl: 'Ta funkcja', tr: 'Bu özellik', vi: 'Tính năng này', id: 'Fitur ini', zh: '此功能', ja: 'この機能', ko: '이 기능' },
+  'common.comingSoonTitle': { en: '{item} — Coming Soon', es: '{item} — Próximamente', pt: '{item} — Em breve', fr: '{item} — Bientôt disponible', de: '{item} — Demnächst', it: '{item} — Prossimamente', ru: '{item} — Скоро', uk: '{item} — Скоро', pl: '{item} — Wkrótce', tr: '{item} — Yakında', vi: '{item} — Sắp ra mắt', id: '{item} — Segera Hadir', zh: '{item} — 即将推出', ja: '{item} — 近日公開', ko: '{item} — 출시 예정' },
+  'common.comingSoonBody': { en: "We're already preparing {item}. Check back later — it will be available soon!", es: 'Ya estamos preparando {item}. Vuelve más tarde — ¡estará disponible pronto!', pt: 'Já estamos preparando {item}. Volte mais tarde — estará disponível em breve!', fr: 'Nous préparons déjà {item}. Revenez plus tard — ce sera bientôt disponible !', de: 'Wir bereiten {item} bereits vor. Schau später wieder vorbei — es wird bald verfügbar sein!', it: 'Stiamo già preparando {item}. Torna più tardi — sarà presto disponibile!', ru: 'Мы уже готовим {item}. Загляните позже — скоро будет доступно!', uk: 'Ми вже готуємо {item}. Завітайте пізніше — незабаром буде доступно!', pl: 'Już przygotowujemy {item}. Zajrzyj później — wkrótce będzie dostępne!', tr: '{item} için hazırlıklarımız sürüyor. Daha sonra tekrar bak — yakında kullanıma sunulacak!', vi: 'Chúng tôi đang chuẩn bị {item}. Quay lại sau — sẽ sớm có mặt!', id: 'Kami sedang menyiapkan {item}. Cek lagi nanti — akan segera tersedia!', zh: '我们正在筹备{item}，请稍后再来查看——即将上线！', ja: '{item}を準備中です。また後で確認してください — もうすぐ利用可能になります！', ko: '{item}을(를) 준비하고 있어요. 나중에 다시 확인해 주세요 — 곧 이용하실 수 있습니다!' },
+  'common.gotIt': { en: 'Got it', es: 'Entendido', pt: 'Entendi', fr: 'Compris', de: 'Verstanden', it: 'Capito', ru: 'Понятно', uk: 'Зрозуміло', pl: 'Rozumiem', tr: 'Anladım', vi: 'Đã hiểu', id: 'Mengerti', zh: '知道了', ja: '了解', ko: '알겠어요' },
+  'nav.topUp': { en: 'Top up', es: 'Recargar', pt: 'Recarregar', fr: 'Recharger', de: 'Aufladen', it: 'Ricarica', ru: 'Пополнить', uk: 'Поповнити', pl: 'Doładuj', tr: 'Bakiye yükle', vi: 'Nạp tiền', id: 'Isi ulang', zh: '充值', ja: 'チャージ', ko: '충전' },
 };
 
 for (const [key, vals] of Object.entries(EXTRA)) {
   for (const code of Object.keys(STRINGS)) {
     STRINGS[code][key] = vals[code] ?? vals.en ?? key;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Aliases: Nav.tsx / Sidebar.tsx use newer dot-path key names (sidebar.*,
+// nav.myBets, sidebar.group.*) that map 1:1 onto the legacy KEYS above.
+// Keeping this as an alias table avoids duplicating every translation.
+// ---------------------------------------------------------------------------
+const ALIASES: Record<string, string> = {
+  'sidebar.markets': 'nav.markets',
+  'sidebar.games': 'nav.games',
+  'sidebar.leaderboard': 'nav.leaderboard',
+  'sidebar.calendar': 'nav.calendar',
+  'sidebar.dailyRewards': 'nav.daily',
+  'sidebar.cases': 'nav.cases',
+  'sidebar.wheel': 'nav.wheel',
+  'sidebar.vip': 'nav.vip',
+  'sidebar.referrals': 'nav.invite',
+  'sidebar.cashier': 'nav.cashier',
+  'sidebar.profile': 'nav.profile',
+  'nav.myBets': 'nav.mybets',
+  'sidebar.admin': 'nav.admin',
+  'sidebar.helpCenter': 'nav.help',
+  'sidebar.howItWorks': 'nav.how',
+  'sidebar.terms': 'nav.terms',
+  'sidebar.responsibleGaming': 'nav.responsible',
+  'sidebar.group.play': 'group.play',
+  'sidebar.group.rewards': 'group.rewards',
+  'sidebar.group.account': 'group.account',
+  'sidebar.group.help': 'group.help',
+};
+
+for (const code of Object.keys(STRINGS)) {
+  for (const [newKey, oldKey] of Object.entries(ALIASES)) {
+    STRINGS[code][newKey] = STRINGS[code][oldKey] ?? newKey;
   }
 }
