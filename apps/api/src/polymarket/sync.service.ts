@@ -101,27 +101,39 @@ export class SyncService implements OnModuleInit {
       this.logger.warn(`World Cup pass failed: ${(e as Error).message}`);
     }
 
-    const p1 = await this.importPass({ order: 'volume24hr', ascending: false }, 2500);
-    total += p1;
-    this.logger.log(`Pass 1 (volume24hr): +${p1} markets`);
+    // Все passes обёрнуты в try/catch — иначе одна ошибка вешает running=true навсегда
+    try {
+      const p1 = await this.importPass({ order: 'volume24hr', ascending: false }, 500);
+      total += p1;
+      this.logger.log(`Pass 1 (volume24hr): +${p1} markets`);
+    } catch (e) {
+      this.logger.warn(`volume24hr pass failed: ${(e as Error).message}`);
+    }
 
     try {
-      const p2 = await this.importPass({ order: 'volume', ascending: false }, 1500);
+      const p2 = await this.importPass({ order: 'volume', ascending: false }, 300);
       total += p2;
       this.logger.log(`Pass 2 (volume): +${p2} markets`);
     } catch (e) {
       this.logger.warn(`volume pass failed: ${(e as Error).message}`);
     }
+
     try {
-      total += await this.importPass({ order: 'endDate', ascending: true }, 800);
+      const p3 = await this.importPass({ order: 'endDate', ascending: true }, 300);
+      total += p3;
+      this.logger.log(`Pass 3 (endDate): +${p3} markets`);
     } catch (e) {
       this.logger.warn(`endDate pass failed: ${(e as Error).message}`);
     }
+
     try {
-      total += await this.importPass({ order: 'liquidity', ascending: false }, 800);
+      const p4 = await this.importPass({ order: 'liquidity', ascending: false }, 300);
+      total += p4;
+      this.logger.log(`Pass 4 (liquidity): +${p4} markets`);
     } catch (e) {
       this.logger.warn(`liquidity pass failed: ${(e as Error).message}`);
     }
+
     return total;
   }
 
