@@ -350,8 +350,8 @@ export class SyncService implements OnModuleInit {
     for (const market of marketsWithOpenBets) {
       if (!market.sourceId) continue;
       try {
-        // Gamma API поддерживает фильтр по market id
-        const url = `https://gamma-api.polymarket.com/markets?id=${encodeURIComponent(market.sourceId)}`;
+        // Gamma API: запрашиваем маркет по id без фильтров — closed=true скрывает активные
+        const url = `https://gamma-api.polymarket.com/markets?id=${encodeURIComponent(market.sourceId)}&closed=true`;
         const res = await fetch(url, { headers: { accept: 'application/json' } });
         if (!res.ok) {
           this.logger.warn(`resolveClosed: fetch market ${market.sourceId} failed: ${res.status}`);
@@ -359,11 +359,20 @@ export class SyncService implements OnModuleInit {
         }
         const data = await res.json();
         const raw = Array.isArray(data) ? data[0] : data;
-        if (!raw) continue;
+        if (!raw) {
+          // Маркет не найден среди закрытых — значит ещё открыт, пропускаем
+          this.logger.log(`resolveClosed: market ${market.sourceId} is not closed yet on Polymarket — waiting.`);
+          continue;
+        }
 
         const m = this.polymarket.parseMarket(raw);
-        // Только закрытые маркеты резолвим — открытые пропускаем
-        if (!raw.closed) continue;
+
+        // Проверяем что маркет действительно завершён (closed или resolved)
+        const isSettled = raw.closed === true || raw.resolved === true;
+        if (!isSettled) {
+          this.logger.log(`resolveClosed: market ${market.sourceId} not settled yet (closed=${raw.closed}, resolved=${raw.resolved}) — waiting.`);
+          continue;
+        }
 
         polyPriceMap.set(market.sourceId, {
           outcomesParsed: m.outcomesParsed,
