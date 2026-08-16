@@ -8,58 +8,59 @@ import {
   Dices, Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/app/providers';
+import { useI18n } from '@/lib/i18n';
 import { ThemeToggle } from './ThemeToggle';
 
 type Item = {
   href?: string;
-  label: string;
+  labelKey: string;
   icon: any;
   accent?: 'gold' | 'win';
   event?: string;
   eventDetail?: string;
   adminOnly?: boolean;
   emoji?: string;
-  badge?: string;
+  badgeKey?: string;
 };
 
-const GROUPS: { title: string; items: Item[] }[] = [
+const GROUPS: { titleKey: string; items: Item[] }[] = [
   {
-    title: 'Play',
+    titleKey: 'sidebar.group.play',
     items: [
-      { href: '/', label: 'Markets', icon: LineChart },
-      { href: '/games', label: 'Games', icon: Gamepad2 },
-      { label: 'Slots', icon: Dices, event: 'predikt:comingsoon', eventDetail: 'Slots', badge: 'SOON' },
-      { href: '/leaderboard', label: 'Leaderboard', icon: Trophy, accent: 'gold' },
-      { href: '/calendar', label: 'Calendar', icon: CalendarDays },
+      { href: '/', labelKey: 'sidebar.markets', icon: LineChart },
+      { href: '/games', labelKey: 'sidebar.games', icon: Gamepad2 },
+      { labelKey: 'sidebar.slots', icon: Dices, event: 'predikt:comingsoon', eventDetail: 'Slots', badgeKey: 'common.soon' },
+      { href: '/leaderboard', labelKey: 'sidebar.leaderboard', icon: Trophy, accent: 'gold' },
+      { href: '/calendar', labelKey: 'sidebar.calendar', icon: CalendarDays },
     ],
   },
   {
-    title: 'Rewards',
+    titleKey: 'sidebar.group.rewards',
     items: [
-      { href: '/daily', label: 'Daily rewards', icon: Gift },
-      { href: '/cases', label: 'Mystery Cases', icon: Package, accent: 'gold' },
-      { href: '/jackpot', label: 'Jackpot', icon: Trophy },
-      { href: '/wheel', label: 'Daily wheel', icon: Disc3 },
-      { href: '/vip', label: 'VIP Club', icon: Crown, accent: 'gold' },
-      { href: '/referrals', label: 'Invite & earn 50%', icon: Users, accent: 'win' },
+      { href: '/daily', labelKey: 'sidebar.dailyRewards', icon: Gift },
+      { href: '/cases', labelKey: 'sidebar.cases', icon: Package, accent: 'gold' },
+      { href: '/jackpot', labelKey: 'sidebar.jackpot', icon: Trophy },
+      { href: '/wheel', labelKey: 'sidebar.wheel', icon: Disc3 },
+      { href: '/vip', labelKey: 'sidebar.vip', icon: Crown, accent: 'gold' },
+      { href: '/referrals', labelKey: 'sidebar.referrals', icon: Users, accent: 'win' },
     ],
   },
   {
-    title: 'Account',
+    titleKey: 'sidebar.group.account',
     items: [
-      { href: '/cashier', label: 'Cashier', icon: Wallet },
-      { href: '/profile', label: 'Profile', icon: User },
-      { event: 'predikt:mybets', label: 'My bets', icon: History },
-      { href: '/admin', label: 'Admin', icon: Shield, accent: 'gold', adminOnly: true },
+      { href: '/cashier', labelKey: 'sidebar.cashier', icon: Wallet },
+      { href: '/profile', labelKey: 'sidebar.profile', icon: User },
+      { event: 'predikt:mybets', labelKey: 'nav.myBets', icon: History },
+      { href: '/admin', labelKey: 'sidebar.admin', icon: Shield, accent: 'gold', adminOnly: true },
     ],
   },
   {
-    title: 'Help',
+    titleKey: 'sidebar.group.help',
     items: [
-      { href: '/help', label: 'Help center', icon: LifeBuoy },
-      { href: '/how', label: 'How it works', icon: HelpCircle },
-      { href: '/legal/terms', label: 'Terms of Use', icon: FileText },
-      { href: '/legal/responsible-gaming', label: 'Responsible Gaming', icon: ShieldCheck },
+      { href: '/help', labelKey: 'sidebar.helpCenter', icon: LifeBuoy },
+      { href: '/how', labelKey: 'sidebar.howItWorks', icon: HelpCircle },
+      { href: '/legal/terms', labelKey: 'sidebar.terms', icon: FileText },
+      { href: '/legal/responsible-gaming', labelKey: 'sidebar.responsibleGaming', icon: ShieldCheck },
     ],
   },
 ];
@@ -67,6 +68,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const { email, role, logout } = useAuth();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [comingSoonLabel, setComingSoonLabel] = useState<string | null>(null);
   const isAdmin = role === 'ADMIN' || role === 'SUPERADMIN';
@@ -82,11 +84,11 @@ export function Sidebar() {
   useEffect(() => {
     const onComingSoon = (e: Event) => {
       const detail = (e as CustomEvent).detail as string | undefined;
-      setComingSoonLabel(detail || 'This feature');
+      setComingSoonLabel(detail || t('common.thisFeature'));
     };
     window.addEventListener('predikt:comingsoon', onComingSoon);
     return () => window.removeEventListener('predikt:comingsoon', onComingSoon);
-  }, []);
+  }, [t]);
 
   const isActive = (href?: string) => {
     if (!href) return false;
@@ -116,6 +118,7 @@ export function Sidebar() {
           <button
             onClick={() => setOpen(false)}
             className="rounded-lg p-1.5 text-fg/50 hover:text-fg lg:hidden"
+            aria-label={t('common.close')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -126,9 +129,9 @@ export function Sidebar() {
           {GROUPS.map((g) => {
             const items = g.items.filter((it) => !it.adminOnly || isAdmin);
             return (
-              <div key={g.title} className="mb-5">
+              <div key={g.titleKey} className="mb-5">
                 <p className="px-3 pb-2 font-mono text-[10px] uppercase tracking-widest text-fg/30">
-                  {g.title}
+                  {t(g.titleKey)}
                 </p>
                 <div className="space-y-0.5">
                   {items.map((it) => {
@@ -162,10 +165,10 @@ export function Sidebar() {
                         ) : (
                           <Icon className="h-4 w-4 shrink-0" />
                         )}
-                        <span className="truncate">{it.label}</span>
-                        {it.badge && (
+                        <span className="truncate">{t(it.labelKey)}</span>
+                        {it.badgeKey && (
                           <span className="ml-auto shrink-0 rounded-full bg-win/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-win">
-                            {it.badge}
+                            {t(it.badgeKey)}
                           </span>
                         )}
                       </>
@@ -174,10 +177,10 @@ export function Sidebar() {
                     if (it.event) {
                       return (
                         <button
-                          key={it.label}
+                          key={it.labelKey}
                           onClick={() => {
                             setOpen(false);
-                            window.dispatchEvent(new CustomEvent(it.event!, { detail: it.eventDetail }));
+                            window.dispatchEvent(new CustomEvent(it.event!, { detail: t(it.labelKey) }));
                           }}
                           className={baseClass + ' text-left'}
                         >
@@ -186,7 +189,7 @@ export function Sidebar() {
                       );
                     }
                     return (
-                      <a key={it.label} href={it.href} className={baseClass}>
+                      <a key={it.labelKey} href={it.href} className={baseClass}>
                         {inner}
                       </a>
                     );
@@ -201,7 +204,7 @@ export function Sidebar() {
         <div className="border-t hairline p-3">
           <div className="mb-2 flex items-center justify-between rounded-xl px-3 py-1.5">
             <span className="flex items-center gap-3 text-sm text-fg/55">
-              <Palette className="h-4 w-4" /> Theme
+              <Palette className="h-4 w-4" /> {t('common.theme')}
             </span>
             <ThemeToggle />
           </div>
@@ -210,17 +213,17 @@ export function Sidebar() {
               onClick={logout}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-fg/55 transition hover:bg-fg/[0.04] hover:text-fg"
             >
-              <LogOut className="h-4 w-4" /> Log out
+              <LogOut className="h-4 w-4" /> {t('common.logout')}
             </button>
           ) : (
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('predikt:auth'))}
               className="w-full rounded-xl bg-gradient-to-b from-gold to-gold-soft py-2.5 text-sm font-bold text-black shadow-gold transition hover:brightness-105"
             >
-              Sign in
+              {t('common.signin')}
             </button>
           )}
-          <p className="mt-2 px-3 text-center text-[10px] text-fg/25">Play money only · 18+</p>
+          <p className="mt-2 px-3 text-center text-[10px] text-fg/25">{t('sidebar.playMoneyDisclaimer')}</p>
         </div>
       </aside>
 
@@ -237,6 +240,7 @@ export function Sidebar() {
             <button
               onClick={() => setComingSoonLabel(null)}
               className="absolute right-3 top-3 rounded-lg p-1.5 text-fg/50 hover:text-fg"
+              aria-label={t('common.close')}
             >
               <X className="h-4 w-4" />
             </button>
@@ -246,17 +250,17 @@ export function Sidebar() {
             </div>
 
             <h3 className="font-display text-lg font-bold text-fg">
-              {comingSoonLabel} — Coming Soon
+              {t('common.comingSoonTitle', { item: comingSoonLabel })}
             </h3>
             <p className="mt-2 text-sm text-fg/60">
-              We're already preparing. {comingSoonLabel.toLowerCase()}. Check back later - it will be available soon!
+              {t('common.comingSoonBody', { item: comingSoonLabel.toLowerCase() })}
             </p>
 
             <button
               onClick={() => setComingSoonLabel(null)}
               className="mt-5 w-full rounded-xl bg-gradient-to-b from-gold to-gold-soft py-2.5 text-sm font-bold text-black shadow-gold transition hover:brightness-105"
             >
-              Понятно
+              {t('common.gotIt')}
             </button>
           </div>
         </div>

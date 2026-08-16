@@ -38,7 +38,7 @@ export function Nav() {
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('predikt:nav'))}
             className="rounded-xl border hairline p-2 text-fg/70 transition hover:text-fg lg:hidden"
-            aria-label="Menu"
+            aria-label={t('common.menu')}
           >
             <Menu className="h-4 w-4" />
           </button>
@@ -75,7 +75,7 @@ export function Nav() {
                   onClick={() => window.dispatchEvent(new CustomEvent('predikt:mybets'))}
                   className="hidden items-center gap-2 rounded-xl border hairline px-3 py-2 text-sm text-fg/70 transition hover:text-fg md:flex"
                 >
-                  <History className="h-4 w-4" /> My bets
+                  <History className="h-4 w-4" /> {t('nav.myBets')}
                 </button>
                 <a href="/cashier" className="flex items-center gap-2 rounded-xl border border-gold/30 bg-gold/[0.06] px-3 py-2 shadow-gold transition hover:bg-gold/10">
                   <Wallet className="h-4 w-4 text-gold-deep" />
@@ -83,12 +83,12 @@ export function Nav() {
                 </a>
                 <a
                   href="/cashier"
-                  title="Пополнить"
+                  title={t('nav.topUp')}
                   className="rounded-xl border border-win/30 bg-win/[0.06] p-2 text-win transition hover:bg-win/10"
                 >
                   <Plus className="h-4 w-4" />
                 </a>
-                <button onClick={logout} title="Log out" className="rounded-xl border hairline p-2 text-fg/50 transition hover:text-fg lg:hidden">
+                <button onClick={logout} title={t('common.logout')} className="rounded-xl border hairline p-2 text-fg/50 transition hover:text-fg lg:hidden">
                   <LogOut className="h-4 w-4" />
                 </button>
               </>

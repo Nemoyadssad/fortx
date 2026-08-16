@@ -3,7 +3,11 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { STRINGS, LANGS } from './locales';
 
-type I18n = { locale: string; setLocale: (l: string) => void; t: (k: string) => string };
+type I18n = {
+  locale: string;
+  setLocale: (l: string) => void;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+};
 
 const I18nCtx = createContext<I18n>({ locale: 'en', setLocale: () => {}, t: (k) => k });
 
@@ -24,7 +28,14 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem('predikt_lang', l); } catch { /* ignore */ }
   };
 
-  const t = (k: string) => (STRINGS[locale] && STRINGS[locale][k]) || STRINGS.en[k] || k;
+  const t = (k: string, vars?: Record<string, string | number>) => {
+    const raw = (STRINGS[locale] && STRINGS[locale][k]) || STRINGS.en[k] || k;
+    if (!vars) return raw;
+    return Object.keys(vars).reduce(
+      (acc, key) => acc.replace(new RegExp(`\\{${key}\\}`, 'g'), String(vars[key])),
+      raw
+    );
+  };
 
   return <I18nCtx.Provider value={{ locale, setLocale, t }}>{children}</I18nCtx.Provider>;
 }
