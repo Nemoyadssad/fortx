@@ -1209,7 +1209,7 @@ function GameControl() {
   }
 
   if (!cfg) return <p className="text-fg/40">Loading…</p>;
-  const EDGE_GAMES = ['dice', 'plinko', 'mines', 'climber', 'crash'];
+  const EDGE_GAMES = ['dice', 'plinko', 'mines', 'tower', 'ladder', 'crash', 'coinflip', 'roulette'];
   const GAME_KEYS = ['dice', 'plinko', 'mines', 'tower', 'ladder', 'crash', 'coinflip', 'roulette', 'cases'];
 
   return (
@@ -1228,7 +1228,7 @@ function GameControl() {
           <div className="rounded-2xl panel p-5">
             <h2 className="font-display text-lg font-bold">House edge (RTP %)</h2>
             <Hint>RTP controls the <b className="text-fg/70">size of wins</b> (payout multiplier), not how often they happen. 97% is standard; 0% makes wins pay nothing. To control how <b className="text-fg/70">often</b> players win, use the <b className="text-gold-deep">Win chance</b> tab.</Hint>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="mt-4 grid gap-4 sm:grid-cols-4 lg:grid-cols-4">
               {EDGE_GAMES.map((g) => (
                 <NumField key={g} label={g} step={0.5} suffix="%"
                   value={Math.round((cfg.edge?.[g] ?? 0.97) * 1000) / 10}
