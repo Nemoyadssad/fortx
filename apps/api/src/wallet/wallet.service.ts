@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
 import { Prisma, AccountType, BetStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LedgerService } from '../ledger/ledger.service';
@@ -9,13 +9,14 @@ const MIN_WITHDRAWAL = 50;
 
 @Injectable()
 export class WalletService {
+  private readonly logger = new Logger(WalletService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly settings: SettingsService,
   ) {}
 
-  /** Create a user's cash + bonus accounts. Called once at registration. */
   async ensureUserAccounts(userId: string, currency = 'USD') {
     for (const type of [AccountType.USER_CASH, AccountType.USER_BONUS]) {
       await this.prisma.ledgerAccount.upsert({
@@ -26,7 +27,6 @@ export class WalletService {
     }
   }
 
-  /** Spendable + bonus balances for a user (creates accounts lazily if missing). */
   async getBalances(userId: string, currency = 'USD') {
     await this.ensureUserAccounts(userId, currency);
     const accounts = await this.prisma.ledgerAccount.findMany({
@@ -39,7 +39,6 @@ export class WalletService {
     return { currency, cash: cash.toString(), bonus: bonus.toString() };
   }
 
-  /** One-time welcome bonus: promo -> user cash, so new users can play immediately. */
   async grantWelcomeBonus(userId: string, amount: Prisma.Decimal.Value = 5) {
     const amt = new Prisma.Decimal(amount);
     return this.prisma.$transaction(async (tx) => {
@@ -47,7 +46,7 @@ export class WalletService {
       const promo = await this.system(tx, AccountType.SYSTEM_PROMO);
       return this.ledger.postWithin(tx, {
         kind: 'BONUS_GRANT',
-        idempotencyKey: `welcome:${userId}`, // granted at most once per user
+        idempotencyKey: `welcome:${userId}`,
         reference: userId,
         legs: [
           { accountId: promo.id, amount: amt.negated() },
@@ -57,7 +56,6 @@ export class WalletService {
     });
   }
 
-  /** Admin credit (+) or debit (-) of a user's cash, balanced against equity. Audited. */
   async adminAdjust(
     userId: string,
     amount: Prisma.Decimal.Value,
@@ -94,7 +92,6 @@ export class WalletService {
     });
   }
 
-  /** Move a game stake from the player to the house (inside a transaction). */
   async gameStakeWithin(
     tx: Prisma.TransactionClient,
     userId: string,
@@ -124,7 +121,6 @@ export class WalletService {
     });
   }
 
-  /** Pay a game win from the house to the player (inside a transaction). */
   async gamePayoutWithin(
     tx: Prisma.TransactionClient,
     userId: string,
@@ -146,13 +142,6 @@ export class WalletService {
     });
   }
 
-  /**
-   * Batch version of gameStakeWithin: validates a single bet's size (same rules
-   * as gameStakeWithin) but moves the *total* of `count` bets in ONE ledger
-   * post instead of `count` separate ones. Used by multi-round plays (e.g.
-   * Plinko's play-batch) so an N-ball drop costs a constant number of DB
-   * round-trips instead of O(N) — avoids blowing the transaction timeout.
-   */
   async gameStakeBatchWithin(
     tx: Prisma.TransactionClient,
     userId: string,
@@ -185,10 +174,6 @@ export class WalletService {
     });
   }
 
-  /**
-   * Batch version of gamePayoutWithin: pays out the combined winnings of a
-   * multi-round play in ONE ledger post. See gameStakeBatchWithin.
-   */
   async gamePayoutBatchWithin(
     tx: Prisma.TransactionClient,
     userId: string,
@@ -220,11 +205,6 @@ export class WalletService {
     return tx.ledgerAccount.findFirstOrThrow({ where: { type, ownerId: null, currency } });
   }
 
-  /**
-   * Credit a user's cash. Used by the payment webhook and by admin adjustments.
-   * Money enters the system: debit SYSTEM_DEPOSITS, credit the user.
-   * `idempotencyKey` (e.g. the payment provider's event id) makes retries safe.
-   */
   async deposit(
     userId: string,
     amount: Prisma.Decimal.Value,
@@ -250,10 +230,6 @@ export class WalletService {
     });
   }
 
-  /**
-   * Money leaves the system: debit the user's cash, credit SYSTEM_WITHDRAWALS.
-   * The ledger refuses to let cash go negative, so over-withdrawals throw.
-   */
   async withdraw(
     userId: string,
     amount: Prisma.Decimal.Value,
@@ -279,7 +255,6 @@ export class WalletService {
     });
   }
 
-  /** Aggregate lifetime stats for a player's profile. */
   async stats(userId: string) {
     const round2 = (n: number) => Math.round(n * 100) / 100;
     const [balances, betGroups, rounds] = await Promise.all([
@@ -328,7 +303,6 @@ export class WalletService {
       if (p > s) gWins += 1;
     }
     const gamesPlayed = rounds.length;
-
     const settledCount = betWon + betLost + gamesPlayed;
     const winCount = betWon + gWins;
 
@@ -354,10 +328,6 @@ export class WalletService {
     };
   }
 
-  /**
-   * Place a fixed-odds bet against the house. The Bet row and the stake lock are
-   * written in one transaction — they cannot drift apart.
-   */
   async placeBet(
     userId: string,
     input: { marketId: string; outcomeId: string; stake: Prisma.Decimal.Value },
@@ -385,7 +355,6 @@ export class WalletService {
       }
 
       const potentialPayout = stake.div(outcome.price);
-
       const cash = await this.userCash(tx, userId);
       const escrow = await this.system(tx, AccountType.SYSTEM_ESCROW);
 
@@ -417,28 +386,51 @@ export class WalletService {
 
   /**
    * Resolve a market to a winning outcome and settle every open bet.
-   * Winners: escrow returns the stake, the house covers the profit, user is paid the full payout.
-   * Losers: their staked escrow becomes house revenue.
+   *
+   * ИСПРАВЛЕНИЯ:
+   * 1. Принимает маркеты в статусах OPEN *или* CLOSED (sync помечает как CLOSED
+   *    в процессе резолюции — OPEN-only CAS блокировал всю цепочку).
+   * 2. Если маркет уже RESOLVED — тихий возврат (идемпотентность), не исключение.
+   *    Это защищает от двойного вызова при ретраях.
+   * 3. Логирует каждый шаг для отладки.
    */
   async settleMarket(marketId: string, winningOutcomeId: string, actorId?: string) {
-    // Шаг 1: атомарный CAS рынка OPEN -> RESOLVED. Гарантирует, что только
-    // один параллельный вызов settleMarket пройдёт дальше этой точки.
+    // Атомарный CAS: переводим OPEN или CLOSED → RESOLVED.
+    // Только один параллельный вызов получит count > 0.
     const { count } = await this.prisma.market.updateMany({
-      where: { id: marketId, status: 'OPEN' },
+      where: {
+        id: marketId,
+        status: { in: ['OPEN', 'CLOSED'] }, // ← ИСПРАВЛЕНО: было только 'OPEN'
+      },
       data: { status: 'RESOLVED', resolvedOutcomeId: winningOutcomeId },
     });
+
     if (count === 0) {
-      throw new BadRequestException('Market is already resolved or not open.');
+      // Маркет уже RESOLVED (или CANCELLED) — идемпотентный повтор, не ошибка.
+      // Проверяем реальный статус для точного лога.
+      const existing = await this.prisma.market.findUnique({
+        where: { id: marketId },
+        select: { status: true, resolvedOutcomeId: true },
+      });
+      this.logger.warn(
+        `settleMarket: market ${marketId} already in status ${existing?.status} ` +
+        `(resolvedOutcomeId=${existing?.resolvedOutcomeId}) — skipping.`,
+      );
+      return { resolved: 0, skipped: true };
     }
+
+    this.logger.log(
+      `settleMarket: market ${marketId} → RESOLVED, winner outcome ${winningOutcomeId}`,
+    );
 
     const escrow = await this.system(this.prisma, AccountType.SYSTEM_ESCROW);
     const house = await this.system(this.prisma, AccountType.SYSTEM_HOUSE);
-    const openBets = await this.prisma.bet.findMany({ where: { marketId, status: 'OPEN' } });
+    const openBets = await this.prisma.bet.findMany({
+      where: { marketId, status: 'OPEN' },
+    });
 
-    // Шаг 2: обрабатываем ставки батчами, а не одной большой транзакцией —
-    // так же, как gameStakeBatchWithin/gamePayoutBatchWithin избегают O(N)
-    // в одной транзакции. idempotencyKey на пост защищает от дублей, если
-    // придётся повторно докрутить недообработанный батч после сбоя.
+    this.logger.log(`settleMarket: settling ${openBets.length} open bets for market ${marketId}`);
+
     const BATCH_SIZE = 200;
     for (let i = 0; i < openBets.length; i += BATCH_SIZE) {
       const chunk = openBets.slice(i, i + BATCH_SIZE);
@@ -493,18 +485,16 @@ export class WalletService {
       },
     });
 
+    this.logger.log(`settleMarket: done — ${openBets.length} bets settled for market ${marketId}`);
     return { resolved: openBets.length };
   }
 
   async sellBet(userId: string, betId: string): Promise<{ refund: string }> {
-    // предварительная проверка вне транзакции — только для быстрого 404/403,
-    // финальное решение принимается атомарно внутри транзакции ниже
     const existing = await this.prisma.bet.findUnique({ where: { id: betId } });
     if (!existing) throw new NotFoundException('Bet not found.');
     if (existing.userId !== userId) throw new ForbiddenException('Not your bet.');
 
     return this.prisma.$transaction(async (tx) => {
-      // атомарный compare-and-swap: только один параллельный запрос получит count === 1
       const { count } = await tx.bet.updateMany({
         where: { id: betId, userId, status: BetStatus.OPEN },
         data: { status: BetStatus.SOLD, settledAt: new Date() },
@@ -514,7 +504,7 @@ export class WalletService {
       }
 
       const bet = await tx.bet.findUniqueOrThrow({ where: { id: betId } });
-      const refund = bet.stake.mul(0.5); // Decimal, без потери точности
+      const refund = bet.stake.mul(0.5);
 
       const escrow = await this.system(tx, AccountType.SYSTEM_ESCROW);
       const cash = await this.userCash(tx, userId);

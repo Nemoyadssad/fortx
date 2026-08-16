@@ -16,20 +16,17 @@ export class SyncService implements OnModuleInit {
     private readonly polymarket: PolymarketService,
   ) {}
 
-  /** Kick off an import a few seconds after boot so the app has fresh data. */
   onModuleInit() {
     setTimeout(() => {
       this.runOnce().catch((e) => this.logger.warn(`Boot sync failed: ${e?.message}`));
     }, 4000);
   }
 
-  // Runs automatically. Change the cadence here or trigger manually via POST /admin/sync.
   @Cron(CronExpression.EVERY_5_MINUTES)
   async scheduled() {
     await this.runOnce();
   }
 
-  /** One full pass: import/refresh open markets, then resolve closed ones. */
   async runOnce() {
     if (this.running) {
       this.logger.warn('Sync already running — skipping this tick.');
@@ -38,6 +35,7 @@ export class SyncService implements OnModuleInit {
     this.running = true;
     try {
       const imported = await this.importOpen();
+      // ключевое: резолвим по СВОЕЙ БД, не по Polymarket
       const resolved = await this.resolveClosed();
       this.logger.log(`Sync done: ${imported} markets imported/updated, ${resolved} resolved.`);
       return { imported, resolved };
@@ -46,11 +44,8 @@ export class SyncService implements OnModuleInit {
     }
   }
 
-  /** Принудительно импортирует матчи ЧМ по нескольким возможным тегам/слагам */
-/** Явно захардкоженный tag_id для FIFA World Cup (футбол) на Polymarket. */
   private readonly WORLD_CUP_TAG_ID = 102232;
 
-  /** Слова, по которым отсеиваем не-футбольные события, если вдруг проскочат в тег. */
   private isFootballEvent(ev: { title?: string; category?: string }): boolean {
     const text = `${ev.title ?? ''} ${ev.category ?? ''}`.toLowerCase();
     const excluded = ['t20', 'cricket', 'odi', 'dota', 'csgo', 'league of legends', 'rugby', 'nascar'];
@@ -58,12 +53,11 @@ export class SyncService implements OnModuleInit {
     return true;
   }
 
-  /** Принудительно импортирует все события FIFA World Cup 2026 по фиксированному tag_id, постранично. */
   async importWorldCup(): Promise<number> {
     let total = 0;
     let foundCount = 0;
     const pageSize = 100;
-    const maxEvents = 1000; // с запасом сверх ожидаемых ~639 событий
+    const maxEvents = 1000;
 
     try {
       for (let offset = 0; offset < maxEvents; offset += pageSize) {
@@ -83,11 +77,11 @@ export class SyncService implements OnModuleInit {
           football.map((ev) => ({ ...ev, category: 'World Cup' })),
         );
 
-        if (events.length < pageSize) break; // последняя страница
+        if (events.length < pageSize) break;
       }
 
       this.logger.log(
-        `World Cup tag ${this.WORLD_CUP_TAG_ID}: ${foundCount} events found across all pages, ${total} markets imported`,
+        `World Cup tag ${this.WORLD_CUP_TAG_ID}: ${foundCount} events found, ${total} markets imported`,
       );
     } catch (e) {
       this.logger.warn(`World Cup tag_id pass failed: ${(e as Error).message}`);
@@ -99,8 +93,6 @@ export class SyncService implements OnModuleInit {
   async importOpen(): Promise<number> {
     let total = 0;
 
-    // FIFA World Cup 2026 — full multi-tag/slug search (importWorldCup),
-    // now run on every automatic sync tick, not just via the manual admin endpoint.
     try {
       const wc = await this.importWorldCup();
       total += wc;
@@ -109,12 +101,10 @@ export class SyncService implements OnModuleInit {
       this.logger.warn(`World Cup pass failed: ${(e as Error).message}`);
     }
 
-    // Popular markets by 24h volume — the headline events.
     const p1 = await this.importPass({ order: 'volume24hr', ascending: false }, 2500);
     total += p1;
     this.logger.log(`Pass 1 (volume24hr): +${p1} markets`);
 
-    // All-time volume — big long-running markets (elections, tournaments).
     try {
       const p2 = await this.importPass({ order: 'volume', ascending: false }, 1500);
       total += p2;
@@ -122,7 +112,6 @@ export class SyncService implements OnModuleInit {
     } catch (e) {
       this.logger.warn(`volume pass failed: ${(e as Error).message}`);
     }
-    // Soonest to resolve — live & upcoming fixtures (sports, daily markets).
     try {
       total += await this.importPass({ order: 'endDate', ascending: true }, 800);
     } catch (e) {
@@ -136,13 +125,12 @@ export class SyncService implements OnModuleInit {
     return total;
   }
 
-  /** Import a specific list of already-fetched events (used for guaranteed slug lookups). */
   private async importEventList(events: Awaited<ReturnType<PolymarketService['getEvents']>>): Promise<number> {
     let count = 0;
     for (const ev of events) {
       if (!ev.markets?.length) continue;
       try {
-       const event = await this.prisma.event.upsert({
+        const event = await this.prisma.event.upsert({
           where: { source_sourceId: { source: 'POLYMARKET', sourceId: ev.id } },
           update: {
             title: ev.title,
@@ -151,7 +139,7 @@ export class SyncService implements OnModuleInit {
             category: 'World Cup',
             status: ev.closed ? 'CLOSED' : 'OPEN',
             closesAt: ev.endDate ? new Date(ev.endDate) : null,
-            createdAt: new Date(), // bump so it stays within the "recent 3000" window returned by /events
+            createdAt: new Date(),
           },
           create: {
             source: 'POLYMARKET',
@@ -202,8 +190,7 @@ export class SyncService implements OnModuleInit {
     return count;
   }
 
-  /** A single ordered import pass, paginated up to maxEvents. */
-private async importPass(
+  private async importPass(
     extra: Record<string, any>,
     maxEvents: number,
     forceCategory?: string,
@@ -291,49 +278,146 @@ private async importPass(
   }
 
   /**
-   * Resolve markets Polymarket has closed. When exactly one outcome is priced at
-   * ~1 we treat it as the winner and settle every bet via the ledger. Anything
-   * ambiguous is just marked CLOSED and left for manual resolution in the admin panel.
+   * ИСПРАВЛЕННАЯ ЛОГИКА РЕЗОЛЮЦИИ:
+   *
+   * Старая логика: берём 100 случайных закрытых маркетов с Polymarket → ищем их в БД.
+   * Проблема: ставки пользователей могут быть на маркеты, которые в эту выборку не попали.
+   *
+   * Новая логика:
+   * 1. Берём из СВОЕЙ БД все маркеты со статусом CLOSED (не RESOLVED),
+   *    у которых есть хотя бы одна открытая ставка.
+   * 2. Для каждого такого маркета идём на Polymarket и проверяем актуальные цены.
+   * 3. Если один исход имеет цену >= 0.99 — это победитель, резолвим.
+   * 4. Если маркет ещё не закрыт на Polymarket — пропускаем.
    */
-  async resolveClosed(limit = 100): Promise<number> {
-    const events = await this.polymarket.getEvents({ limit, closed: true });
-    let resolved = 0;
+  async resolveClosed(): Promise<number> {
+    // Шаг 1: Находим все маркеты в нашей БД, которые CLOSED и имеют открытые ставки
+    const marketsWithOpenBets = await this.prisma.market.findMany({
+      where: {
+        status: { in: ['CLOSED', 'OPEN'] }, // OPEN тоже проверяем — Polymarket мог уже закрыть
+        bets: { some: { status: 'OPEN' } },
+        sourceId: { not: null },
+      },
+      include: {
+        outcomes: true,
+        bets: { where: { status: 'OPEN' }, select: { id: true } },
+      },
+    });
 
-    for (const ev of events) {
-      if (!ev.markets?.length) continue;
-      for (const raw of ev.markets) {
-        const m = this.polymarket.parseMarket(raw);
-        try {
-          const market = await this.prisma.market.findFirst({
-            where: { sourceId: m.id, status: { not: 'RESOLVED' } },
+    if (!marketsWithOpenBets.length) {
+      this.logger.log('resolveClosed: no markets with open bets found.');
+      return 0;
+    }
+
+    this.logger.log(
+      `resolveClosed: checking ${marketsWithOpenBets.length} markets with open bets...`,
+    );
+
+    // Шаг 2: Группируем sourceId для пакетного запроса к Polymarket
+    // Polymarket Gamma API не даёт fetchById батчами, поэтому берём закрытые события
+    // и строим map: sourceId -> parsed prices
+    const sourceIds = new Set(marketsWithOpenBets.map((m) => m.sourceId!));
+
+    // Получаем закрытые события с Polymarket постранично (до 5000 маркетов)
+    const polyPriceMap = new Map<string, { outcomesParsed: string[]; pricesParsed: string[] }>();
+    const pageSize = 100;
+    const maxPages = 50; // 5000 маркетов максимум
+
+    for (let page = 0; page < maxPages; page++) {
+      let events;
+      try {
+        events = await this.polymarket.getEvents({
+          limit: pageSize,
+          offset: page * pageSize,
+          closed: true,
+        });
+      } catch (e) {
+        this.logger.warn(`resolveClosed: getEvents page ${page} failed: ${(e as Error).message}`);
+        break;
+      }
+
+      if (!events.length) break;
+
+      for (const ev of events) {
+        if (!ev.markets?.length) continue;
+        for (const raw of ev.markets) {
+          if (!sourceIds.has(raw.id)) continue; // нас интересует только этот маркет
+          const m = this.polymarket.parseMarket(raw);
+          polyPriceMap.set(raw.id, {
+            outcomesParsed: m.outcomesParsed,
+            pricesParsed: m.pricesParsed,
           });
-          if (!market) continue;
-
-          const winners = m.pricesParsed
-            .map((p, i) => ({ i, price: Number(p) }))
-            .filter((x) => x.price >= 0.99);
-
-          if (winners.length !== 1) {
-            await this.prisma.market.update({
-              where: { id: market.id },
-              data: { status: 'CLOSED' },
-            });
-            continue;
-          }
-
-          const winningLabel = m.outcomesParsed[winners[0].i];
-          const outcome = await this.prisma.outcome.findFirst({
-            where: { marketId: market.id, label: winningLabel },
-          });
-          if (!outcome) continue;
-
-          await this.wallet.settleMarket(market.id, outcome.id);
-          resolved++;
-        } catch (err) {
-          this.logger.error(`Failed to resolve market ${m.id}: ${(err as Error).message}`);
         }
       }
+
+      // Если нашли все нужные маркеты — не качаем больше страниц
+      if (polyPriceMap.size >= sourceIds.size) break;
+      if (events.length < pageSize) break;
     }
+
+    this.logger.log(
+      `resolveClosed: found prices for ${polyPriceMap.size}/${sourceIds.size} markets on Polymarket`,
+    );
+
+    // Шаг 3: Резолвим каждый маркет
+    let resolved = 0;
+
+    for (const market of marketsWithOpenBets) {
+      if (!market.sourceId) continue;
+
+      const polyData = polyPriceMap.get(market.sourceId);
+
+      if (!polyData) {
+        // Маркет ещё не закрыт на Polymarket — пропускаем, ждём следующего тика
+        continue;
+      }
+
+      try {
+        // Помечаем маркет как CLOSED в нашей БД (если ещё не)
+        if (market.status !== 'CLOSED') {
+          await this.prisma.market.update({
+            where: { id: market.id },
+            data: { status: 'CLOSED' },
+          });
+        }
+
+        // Ищем победителя: исход с ценой >= 0.99
+        const winners = polyData.pricesParsed
+          .map((p, i) => ({ i, price: Number(p) }))
+          .filter((x) => x.price >= 0.99);
+
+        if (winners.length !== 1) {
+          // Ambiguous или несколько победителей — оставляем для ручной резолюции
+          this.logger.warn(
+            `resolveClosed: market ${market.sourceId} has ${winners.length} winners — skipping (manual resolution needed)`,
+          );
+          continue;
+        }
+
+        const winningLabel = polyData.outcomesParsed[winners[0].i];
+        const outcome = market.outcomes.find((o) => o.label === winningLabel);
+
+        if (!outcome) {
+          this.logger.warn(
+            `resolveClosed: winning outcome "${winningLabel}" not found in DB for market ${market.id}`,
+          );
+          continue;
+        }
+
+        this.logger.log(
+          `resolveClosed: settling market ${market.id} (${market.sourceId}), winner: "${winningLabel}", open bets: ${market.bets.length}`,
+        );
+
+        await this.wallet.settleMarket(market.id, outcome.id);
+        resolved++;
+      } catch (err) {
+        this.logger.error(
+          `resolveClosed: failed to resolve market ${market.id}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    this.logger.log(`resolveClosed: resolved ${resolved} markets.`);
     return resolved;
   }
 }
