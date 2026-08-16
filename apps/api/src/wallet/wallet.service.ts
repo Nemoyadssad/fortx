@@ -434,45 +434,53 @@ export class WalletService {
     const BATCH_SIZE = 200;
     for (let i = 0; i < openBets.length; i += BATCH_SIZE) {
       const chunk = openBets.slice(i, i + BATCH_SIZE);
-      await this.prisma.$transaction(async (tx) => {
-        for (const bet of chunk) {
-          const cash = await this.userCash(tx, bet.userId);
-
-          if (bet.outcomeId === winningOutcomeId) {
-            const profitFromHouse = bet.potentialPayout.sub(bet.stake);
-            await this.ledger.postWithin(tx, {
-              kind: 'BET_SETTLE_WIN',
-              reference: bet.id,
-              idempotencyKey: `settle:${bet.id}`,
-              createdById: actorId,
-              legs: [
-                { accountId: escrow.id, amount: bet.stake.negated() },
-                { accountId: house.id, amount: profitFromHouse.negated() },
-                { accountId: cash.id, amount: bet.potentialPayout },
-              ],
-            });
-            await tx.bet.update({
-              where: { id: bet.id },
-              data: { status: 'WON', settledAt: new Date() },
-            });
+      for (const bet of chunk) {
+        try {
+          await this.prisma.$transaction(async (tx) => {
+            const cash = await this.userCash(tx, bet.userId);
+            if (bet.outcomeId === winningOutcomeId) {
+              const profitFromHouse = bet.potentialPayout.sub(bet.stake);
+              await this.ledger.postWithin(tx, {
+                kind: 'BET_SETTLE_WIN',
+                reference: bet.id,
+                idempotencyKey: `settle:${bet.id}`,
+                createdById: actorId,
+                legs: [
+                  { accountId: escrow.id, amount: bet.stake.negated() },
+                  { accountId: house.id, amount: profitFromHouse.negated() },
+                  { accountId: cash.id, amount: bet.potentialPayout },
+                ],
+              });
+              await tx.bet.update({
+                where: { id: bet.id },
+                data: { status: 'WON', settledAt: new Date() },
+              });
+            } else {
+              await this.ledger.postWithin(tx, {
+                kind: 'BET_SETTLE_LOSS',
+                reference: bet.id,
+                idempotencyKey: `settle:${bet.id}`,
+                createdById: actorId,
+                legs: [
+                  { accountId: escrow.id, amount: bet.stake.negated() },
+                  { accountId: house.id, amount: bet.stake },
+                ],
+              });
+              await tx.bet.update({
+                where: { id: bet.id },
+                data: { status: 'LOST', settledAt: new Date() },
+              });
+            }
+          });
+        } catch (err: any) {
+          // Unique constraint on idempotencyKey = уже обработано параллельным вызовом
+          if (err?.code === 'P2002') {
+            this.logger.warn(`settleMarket: bet ${bet.id} already settled (idempotency) — skipping.`);
           } else {
-            await this.ledger.postWithin(tx, {
-              kind: 'BET_SETTLE_LOSS',
-              reference: bet.id,
-              idempotencyKey: `settle:${bet.id}`,
-              createdById: actorId,
-              legs: [
-                { accountId: escrow.id, amount: bet.stake.negated() },
-                { accountId: house.id, amount: bet.stake },
-              ],
-            });
-            await tx.bet.update({
-              where: { id: bet.id },
-              data: { status: 'LOST', settledAt: new Date() },
-            });
+            this.logger.error(`settleMarket: failed to settle bet ${bet.id}: ${err?.message}`);
           }
         }
-      });
+      }
     }
 
     await this.prisma.auditLog.create({
